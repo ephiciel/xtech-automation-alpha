@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Sets up page & loads styles & libraries -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f7fb">
+    <title>XTECH Automation</title>
+    <!-- Loads the XTECH design styles -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Firebase modular authentication is loaded by app.js -->
+    <!-- Loads Chart.js for dashboard charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Generates the authenticator QR code during TOTP setup -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <!-- Shows the sign in & customer registration screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="brand">XTECH <span>Automation</span></div>
+                <button type="button" class="theme-toggle" id="themeToggle" aria-label="Switch to dark mode">
+                    <span class="theme-icon">☾</span>
+                    <span class="theme-label">Dark mode</span>
+                </button>
+            </div>
+            <p class="muted">Inventory, pickup, customer, and sales monitoring system</p>
+
+            <!-- Switches btwn sign in and registration -->
+            <div class="auth-tabs">
+                <button id="showLoginBtn" type="button" class="auth-tab active">Sign In</button>
+                <button id="showRegisterBtn" type="button" class="auth-tab">Customer Registration</button>
+            </div>
+
+            <!-- Lets an existing user choose a sign-in method -->
+            <form id="loginForm" class="auth-form">
+                <div class="signin-methods" role="group" aria-label="Choose sign-in method">
+                    <button id="passwordTotpMethod" class="signin-method active" type="button">
+                        <strong>Password + Authenticator</strong>
+                        <span>Uses your password and a 6-digit authenticator code.</span>
+                    </button>
+                    <button id="emailOtpMethod" class="signin-method" type="button">
+                        <strong>Email OTP</strong>
+                        <span>Sends a 6-digit one-time code to your email.</span>
+                    </button>
+                </div>
+
+                <div id="passwordTotpFields" class="auth-method-panel">
+                    <label>Email<input id="loginEmail" type="email" autocomplete="email" maxlength="254"></label>
+                    <label>
+                        Password
+                        <div class="password-wrap">
+                            <input id="loginPassword" type="password" autocomplete="current-password" maxlength="128">
+                            <button type="button" class="password-toggle" data-target="loginPassword" aria-label="Show password">Show</button>
+                        </div>
+                    </label>
+                    <p class="helper-text auth-method-note">If this account has not set up an authenticator yet, XTECH will guide you through setup after verifying your email.</p>
+                </div>
+
+                <div id="emailOtpFields" class="auth-method-panel hidden">
+                    <label>Email<input id="emailOtpEmail" type="email" autocomplete="email" maxlength="254"></label>
+                    <p class="helper-text auth-method-note">XTECH will send a short-lived 6-digit code to the registered email address. You must already have an active XTECH account.</p>
+                </div>
+
+                <button id="loginSubmit" class="primary full" type="submit">Continue with Password + Authenticator</button>
+                <p id="loginMessage" class="message"></p>
+            </form>
+
+            <!-- Verifies a one-time code sent to the registered email address -->
+            <form id="emailOtpForm" class="auth-form hidden">
+                <div class="security-step-head">
+                    <span class="security-step-icon">✉</span>
+                    <div>
+                        <strong>Email verification</strong>
+                        <small id="emailOtpDestination">Enter the 6-digit code sent to your email.</small>
+                    </div>
+                </div>
+                <label>
+                    6-digit email code
+                    <input id="emailOtpCode" class="otp-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" required>
+                </label>
+                <button class="primary full" type="submit">Verify Code and Sign In</button>
+                <div class="otp-secondary-actions">
+                    <button id="resendEmailOtp" class="ghost" type="button">Resend Code</button>
+                    <button id="cancelEmailOtp" class="ghost" type="button">Cancel</button>
+                </div>
+                <p id="emailOtpMessage" class="message"></p>
+            </form>
+
+            <!-- Verifies an authenticator code when Firebase requires MFA -->
+            <form id="totpChallengeForm" class="auth-form hidden">
+                <div class="security-step-head">
+                    <span class="security-step-icon">✓</span>
+                    <div><strong>Authenticator verification</strong><small>Enter the current 6-digit code from your authenticator app.</small></div>
+                </div>
+                <label>6-digit code<input id="totpChallengeCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" required></label>
+                <button class="primary full" type="submit">Verify and Sign In</button>
+                <button id="cancelTotpChallenge" class="ghost full" type="button">Cancel</button>
+                <p id="totpChallengeMessage" class="message"></p>
+            </form>
+
+            <!-- Sets up Google Authenticator or another TOTP app -->
+            <form id="totpEnrollForm" class="auth-form hidden">
+                <div class="security-step-head">
+                    <span class="security-step-icon">✦</span>
+                    <div><strong>Set up Authenticator</strong><small>Scan the QR code, then enter the 6-digit code shown by your app.</small></div>
+                </div>
+                <div id="totpQr" class="totp-qr" aria-label="Authenticator QR code"></div>
+                <div class="totp-secret-wrap">
+                    <span>Manual setup key</span>
+                    <code id="totpSecretKey">—</code>
+                </div>
+                <label>6-digit code<input id="totpEnrollCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" required></label>
+                <button class="primary full" type="submit">Finish Authenticator Setup</button>
+                <button id="cancelTotpEnroll" class="ghost full" type="button">Cancel</button>
+                <p id="totpEnrollMessage" class="message"></p>
+            </form>
+
+            <!-- Lets a customer create a new account -->
+            <form id="registerForm" class="auth-form hidden">
+                <div class="form-grid compact-grid">
+                    <label class="wide">Full Name<input id="registerName" maxlength="80" autocomplete="name" required></label>
+                    <label>Email<input id="registerEmail" type="email" autocomplete="email" maxlength="254" required></label>
+                    <label>Phone Number<input id="registerPhone" type="tel" maxlength="25" inputmode="tel" autocomplete="tel"></label>
+                    <label>Company / Organization<input id="registerCompany" maxlength="120" autocomplete="organization"></label>
+                    <label>Address<input id="registerAddress" maxlength="250" autocomplete="street-address"></label>
+                    <label>
+                        Password
+                        <div class="password-wrap">
+                            <input id="registerPassword" type="password" minlength="6" maxlength="128" autocomplete="new-password" required>
+                            <button type="button" class="password-toggle" data-target="registerPassword" aria-label="Show password">Show</button>
+                        </div>
+                    </label>
+                    <label>
+                        Confirm Password
+                        <div class="password-wrap">
+                            <input id="registerPassword2" type="password" minlength="6" maxlength="128" autocomplete="new-password" required>
+                            <button type="button" class="password-toggle" data-target="registerPassword2" aria-label="Show password">Show</button>
+                        </div>
+                    </label>
+                </div>
+                <button class="primary full" type="submit">Create Customer Account</button>
+                <p class="helper-text">Customer accounts can manage their profile and submit or cancel their own pending pickup requests.</p>
+                <p id="registerMessage" class="message"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Contains the main XTECH application after login -->
+    <div id="app" class="hidden">
+        <!-- Shows the app name, account type, theme button, and sign out button -->
+        <header class="topbar">
+            <div>
+                <div class="brand">XTECH <span>Automation</span></div>
+                <small id="roleLabel"></small>
+            </div>
+            <div class="top-actions">
+                <button type="button" class="theme-toggle topbar-theme-toggle" id="headerThemeToggle" aria-label="Switch to dark mode">
+                    <span class="theme-icon">☾</span>
+                    <span class="theme-label">Dark mode</span>
+                </button>
+                <span id="userEmail"></span>
+                <button id="logoutBtn" class="ghost">Sign Out</button>
+            </div>
+        </header>
+
+        <div class="layout">
+            <!-- Contains the main navigation buttons -->
+            <aside class="sidebar">
+                <button class="nav active" data-section="dashboard">Dashboard</button>
+                <button class="nav" data-section="inventory">Inventory Management</button>
+                <button class="nav" data-section="transactions">Stock Movement History</button>
+                <button class="nav" data-section="customers">Customer Management</button>
+                <button class="nav" data-section="pickups">Pickup Services</button>
+                <button class="nav" data-section="sales">Sales Transactions</button>
+                <button class="nav admin-only" data-section="users">User Accounts</button>
+                <button class="nav admin-only" data-section="reports">Reports</button>
+                <button class="nav customer-only" data-section="profile">My Profile</button>
+                <button class="nav" data-section="security">Account &amp; Security</button>
+            </aside>
+
+            <!-- Contains all pages shown inside the application -->
+            <main class="content">
+                <!-- Shows system totals, charts, and recent activity -->
+                <section id="dashboard" class="section active">
+                    <div class="page-head">
+                        <div><h1>Dashboard</h1><p>Current operational status, stock attention, and trends.</p></div>
+                        <button id="refreshDashboard" class="secondary">Refresh Dashboard</button>
+                    </div>
+
+                    <div class="metrics metrics-6">
+                        <div class="metric"><span>Active Products</span><strong id="mProducts">—</strong></div>
+                        <div class="metric"><span>Low / Out of Stock</span><strong id="mLow">—</strong></div>
+                        <div class="metric"><span>Active Customers</span><strong id="mCustomers">—</strong></div>
+                        <div class="metric"><span>Pending Pickups</span><strong id="mPickups">—</strong></div>
+                        <div class="metric"><span>Sales Transactions</span><strong id="mSales">—</strong></div>
+                        <div class="metric"><span>Total Units Sold</span><strong id="mUnitsSold">—</strong></div>
+                    </div>
+
+                    <div class="grid-3">
+                        <div class="card chart-card"><h2>Current Inventory Levels</h2><canvas id="inventoryChart"></canvas></div>
+                        <div class="card chart-card"><h2>Pickup Requests — Last 7 Days</h2><canvas id="pickupChart"></canvas></div>
+                        <div class="card chart-card"><h2>Units Sold — Last 7 Days</h2><canvas id="salesChart"></canvas></div>
+                    </div>
+
+                    <div class="card dashboard-attention-card">
+                        <div class="card-head"><h2>Products Requiring Attention</h2><span class="muted">Low or out of stock</span></div>
+                        <div class="table-wrap compact-table-wrap">
+                            <table class="compact-table">
+                                <thead><tr><th>Product</th><th>Current Stock</th><th>Reorder Level</th><th>Status</th></tr></thead>
+                                <tbody id="dashboardLowStock"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Lets staff manage products and stock levels -->
+                <section id="inventory" class="section">
+                    <div class="page-head">
+                        <div><h1>Inventory Management</h1><p>Manage product records, categories, and product descriptions.</p></div>
+                        <div class="page-actions">
+                            <button id="stockInBtn" class="primary">Stock In (Add Stock)</button>
+                            <button id="stockOutBtn" class="secondary">Stock Out (Release Stock)</button>
+                            <button id="archiveBtn" class="ghost dark-ghost">Archived Products</button>
+                        </div>
+                    </div>
+
+                    <!-- Shows the total number of units currently in inventory -->
+                    <div class="inventory-summary">
+                        <div class="metric inventory-stock-metric">
+                            <span>Current Total Stock</span>
+                            <strong id="inventoryCurrentStock">—</strong>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="filters">
+                            <input id="productSearch" placeholder="Search by product ID or product name">
+                            <select id="categoryFilter">
+                                <option value="">All Categories</option>
+                                <option>Industrial Chemical</option>
+                                <option>Janitorial Chemical</option>
+                                <option>Cleaning Supply</option>
+                                <option>Other</option>
+                            </select>
+                            <select id="statusFilter">
+                                <option value="">All Stock Statuses</option>
+                                <option>In Stock</option>
+                                <option>Low Stock</option>
+                                <option>Out of Stock</option>
+                            </select>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr><th>Product ID</th><th>Product Name</th><th>Category</th><th>Stock Status</th><th>Actions</th></tr></thead>
+                                <tbody id="productTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card" id="addProductCard">
+                        <h2>Add New Product</h2>
+                        <form id="productForm" class="form-grid">
+                            <label>Product ID<input id="productID" minlength="2" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,39}" title="Use 2 to 40 letters, numbers, hyphens, or underscores." required></label>
+                            <label>Product Name<input id="productName" minlength="2" maxlength="100" required></label>
+                            <label>Category<select id="category" required><option value="">Select Category</option><option>Industrial Chemical</option><option>Janitorial Chemical</option><option>Cleaning Supply</option><option>Other</option></select></label>
+                            <label class="wide">Product Description<textarea id="description" maxlength="500" placeholder="Optional product description"></textarea></label>
+                            <button class="primary wide" type="submit">Add Product</button>
+                            <p id="productMessage" class="message wide"></p>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Shows the history of stock movements -->
+                <section id="transactions" class="section">
+                    <div class="page-head"><div><h1>Stock Movement History</h1><p>Audit every stock increase and decrease, including sales and completed pickups.</p></div><button id="refreshTransactions" class="secondary">Refresh History</button></div>
+                    <div class="card">
+                        <div class="filters filters-5">
+                            <input id="transactionSearch" placeholder="Search product, ID, reason, or user">
+                            <select id="transactionType"><option value="">All Movement Types</option><option value="INITIAL_STOCK">Initial Stock</option><option value="STOCK_IN">Stock In (Added)</option><option value="STOCK_OUT">Stock Out (Released)</option><option value="PICKUP_OUT">Pickup Completion</option><option value="SALE_OUT">Sale Confirmation</option></select>
+                            <select id="transactionProduct"><option value="">All Products</option></select>
+                            <label class="filter-label">From<input id="transactionFrom" type="date"></label>
+                            <label class="filter-label">To<input id="transactionTo" type="date"></label>
+                        </div>
+                        <div class="filter-actions"><button id="clearTransactionFilters" class="ghost dark-ghost" type="button">Clear Filters</button></div>
+                        <div class="table-wrap">
+                            <table><thead><tr><th>Date & Time</th><th>Movement Type</th><th>Product</th><th>Quantity Changed</th><th>Stock Before</th><th>Stock After</th><th>Reason / Reference</th><th>Performed By</th></tr></thead><tbody id="transactionTable"></tbody></table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Lets staff manage customer records -->
+                <section id="customers" class="section">
+                    <div class="page-head"><div><h1>Customer Management</h1><p>Maintain customer information, account status, and transaction history.</p></div></div>
+                    <div class="card" id="customerRegistrationCard">
+                        <h2>Register Customer Record</h2>
+                        <p class="helper-text">Use this for customers recorded by staff. Customers who need their own login can use Customer Registration on the sign-in screen.</p>
+                        <form id="customerForm" class="form-grid">
+                            <label>Customer Name<input id="customerName" maxlength="80" required></label>
+                            <label>Email Address<input id="customerEmail" type="email" maxlength="254" required></label>
+                            <label>Phone Number<input id="customerPhone" type="tel" maxlength="25" inputmode="tel"></label>
+                            <label>Company / Organization<input id="customerCompany" maxlength="120"></label>
+                            <label class="wide">Address<input id="customerAddress" maxlength="250"></label>
+                            <button class="primary wide">Register Customer</button>
+                            <p id="customerMessage" class="message wide"></p>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <div class="filters filters-compact-2">
+                            <input id="customerSearch" placeholder="Search name, email, phone, or company">
+                            <select id="customerStatusFilter"><option value="">All Customer Statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr><th>Customer Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Status</th><th>Login Account</th><th>Actions</th></tr></thead><tbody id="customerTable"></tbody></table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Lets users create and manage pickup requests -->
+                <section id="pickups" class="section">
+                    <div class="page-head"><div><h1>Pickup Services</h1><p>Submit, approve, complete, and track product pickup requests.</p></div></div>
+                    <div class="card">
+                        <h2>New Pickup Request</h2>
+                        <p id="pickupCustomerHelp" class="helper-text">Select a registered customer when applicable. Walk-in requests can use “Walk-in / No registered customer”.</p>
+                        <form id="pickupForm" class="form-grid">
+                            <label id="pickupCustomerField">Customer (Optional)<select id="pickupCustomerID"><option value="">Walk-in / No registered customer</option></select></label>
+                            <label>Requested Pickup Date<input id="pickupDate" type="date" required></label>
+                            <div class="wide item-builder">
+                                <h3>Products for Pickup</h3><p class="helper-text">Select a product and quantity, then add it to the request.</p>
+                                <div class="item-builder-controls">
+                                    <label>Product<select id="pickupProduct"></select></label>
+                                    <label>Quantity<input id="pickupQuantity" type="number" min="1" max="1" step="1" value="1" disabled></label>
+                                    <button id="addPickupItem" class="secondary" type="button" disabled>Add Product</button>
+                                </div>
+                                <p id="pickupStockHint" class="helper-text">Select a product to view the current admin inventory quantity.</p>
+                                <div id="pickupItemList" class="item-list"></div>
+                            </div>
+                            <label class="wide">Pickup Notes (Optional)<textarea id="pickupNotes" maxlength="500" placeholder="Special instructions or pickup details"></textarea></label>
+                            <button class="primary wide">Submit Pickup Request</button>
+                            <p id="pickupMessage" class="message wide"></p>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <div class="filters filters-4">
+                            <input id="pickupSearch" placeholder="Search pickup reference, customer, product, or notes">
+                            <select id="pickupStatusFilter"><option value="">All Pickup Statuses</option><option>Pending</option><option>Approved</option><option>Completed</option><option>Cancelled</option></select>
+                            <label class="filter-label">Requested From<input id="pickupFrom" type="date"></label>
+                            <label class="filter-label">Requested To<input id="pickupTo" type="date"></label>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr><th>Request Date & Time</th><th>Pickup Reference</th><th>Customer</th><th>Requested Pickup Date</th><th>Pickup Status</th><th>Products / Quantity</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="pickupTable"></tbody></table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Lets staff record sales and deduct sold stock -->
+                <section id="sales" class="section">
+                    <div class="page-head"><div><h1>Sales Transactions</h1><p>Record confirmed sales and automatically deduct the sold quantities from inventory.</p></div></div>
+                    <div class="card">
+                        <h2>Record New Sale</h2>
+                        <p class="helper-text">A registered customer is optional. Use “Walk-in / No registered customer” for over-the-counter sales. XTECH records products and quantities only; financial handling is managed outside the system.</p>
+                        <form id="saleForm" class="form-grid">
+                            <label>Customer (Optional)<select id="saleCustomerID"><option value="">Walk-in / No registered customer</option></select></label>
+                            <div class="wide item-builder">
+                                <h3>Products Sold</h3><p class="helper-text">Add the products and quantities included in this transaction. Inventory is deducted when the sale is confirmed.</p>
+                                <div class="item-builder-controls">
+                                    <label>Product<select id="saleProduct"></select></label>
+                                    <label>Quantity<input id="saleQuantity" type="number" min="1" max="1000000" step="1" value="1"></label>
+                                    <button id="addSaleItem" class="secondary" type="button">Add Product</button>
+                                </div>
+                                <div id="saleItemList" class="item-list"></div>
+                            </div>
+                            <label class="wide">Sale Notes (Optional)<textarea id="saleNotes" maxlength="500" placeholder="Optional remarks about this sale"></textarea></label>
+                            <button class="primary wide">Confirm and Record Sale</button>
+                            <p id="saleMessage" class="message wide"></p>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <div class="filters filters-5">
+                            <input id="saleSearch" placeholder="Search sale reference, customer, product, or notes">
+                            <select id="saleCustomerFilter"><option value="">All Customers</option></select>
+                            <select id="saleStatusFilter"><option value="">All Sale Statuses</option><option>Confirmed</option></select>
+                            <label class="filter-label">From<input id="saleFrom" type="date"></label>
+                            <label class="filter-label">To<input id="saleTo" type="date"></label>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr><th>Date & Time</th><th>Sale Reference</th><th>Customer</th><th>Sale Status</th><th>Products Sold</th><th>Processed By</th><th>Actions</th></tr></thead><tbody id="saleTable"></tbody></table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Lets the admin create and manage staff accounts -->
+                <section id="users" class="section admin-only-section">
+                    <div class="page-head"><div><h1>User Accounts</h1><p>Create and manage Secretary and Warehouse staff accounts.</p></div><button id="refreshUsers" class="secondary">Refresh Accounts</button></div>
+                    <div class="card">
+                        <h2>Create Staff Account</h2>
+                        <form id="userForm" class="form-grid">
+                            <label>Full Name<input id="userName" maxlength="80" required></label>
+                            <label>Email Address<input id="userAccountEmail" type="email" maxlength="254" required></label>
+                            <label>
+                                Temporary Password
+                                <div class="password-wrap">
+                                    <input id="userPassword" type="password" minlength="6" maxlength="128" required>
+                                    <button type="button" class="password-toggle" data-target="userPassword" aria-label="Show password">Show</button>
+                                </div>
+                            </label>
+                            <label>Role<select id="userRole" required><option value="">Select Role</option><option value="secretary">Secretary</option><option value="warehouse">Warehouse</option></select></label>
+                            <button class="primary wide">Create Staff Account</button>
+                            <p id="userMessage" class="message wide"></p>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <div class="filters filters-compact-2"><input id="userSearch" placeholder="Search name, email, or role"><select id="userStatusFilter"><option value="">All Account Statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+                        <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody id="userTable"></tbody></table></div>
+                    </div>
+                </section>
+
+                <!-- Lets the admin view and export system reports -->
+                <section id="reports" class="section admin-only-section">
+                    <div class="page-head"><div><h1>Reports</h1><p>Review and export inventory, stock movement, sales, and pickup information.</p></div><button id="refreshReports" class="secondary">Generate Report</button></div>
+                    <div class="card report-controls no-print">
+                        <div class="filters filters-4">
+                            <label class="filter-label">Start Date<input id="reportStart" type="date"></label>
+                            <label class="filter-label">End Date<input id="reportEnd" type="date"></label>
+                            <label class="filter-label">Report Type<select id="reportType"><option value="inventory">Inventory Report</option><option value="transactions">Stock Movement Report</option><option value="sales">Sales Report</option><option value="pickups">Pickup Report</option></select></label>
+                            <div class="filter-button-wrap"><button id="clearReportDates" type="button" class="ghost dark-ghost">Clear Date Range</button></div>
+                        </div>
+                        <p class="helper-text">Date filters apply to stock movements, sales, and pickup request activity. Inventory shows the current active inventory.</p>
+                    </div>
+
+                    <div id="printReportHeader" class="print-report-header">
+                        <h2>XTECH Automation Report</h2>
+                        <p id="reportPeriodLabel">Current data</p>
+                    </div>
+
+                    <div class="metrics metrics-6 report-metrics">
+                        <div class="metric"><span>Active Products</span><strong id="rProducts">—</strong></div>
+                        <div class="metric"><span>Low / Out of Stock</span><strong id="rLow">—</strong></div>
+                        <div class="metric"><span>Active Customers</span><strong id="rCustomers">—</strong></div>
+                        <div class="metric"><span>Sales in Period</span><strong id="rSales">—</strong></div>
+                        <div class="metric"><span>Units Sold in Period</span><strong id="rUnitsSold">—</strong></div>
+                        <div class="metric"><span>Pickups in Period</span><strong id="rPickups">—</strong></div>
+                    </div>
+
+                    <div class="card report-table-card">
+                        <div class="card-head report-card-head">
+                            <h2 id="reportTableTitle">Inventory Report</h2>
+                            <div class="report-meta">
+                                <span id="reportRowCount" class="muted">0 rows</span>
+                                <span id="reportGeneratedAt" class="muted"></span>
+                            </div>
+                        </div>
+                        <div class="table-wrap"><table id="reportTable"><thead id="reportTableHead"></thead><tbody id="reportTableBody"></tbody></table></div>
+                    </div>
+
+                    <div class="card no-print report-export-card">
+                        <div>
+                            <h2>Export Current Report</h2>
+                            <p class="helper-text">Exports use the selected report type and date range. Print / Save PDF opens a clean report-only print view.</p>
+                        </div>
+                        <div class="export-grid report-export-actions">
+                            <button id="exportCurrentCsv" class="secondary">Download CSV</button>
+                            <button id="printReport" class="primary">Print / Save PDF</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Lets customers update their own profile -->
+                <section id="profile" class="section customer-only-section">
+                    <div class="page-head"><div><h1>My Profile</h1><p>Update your customer contact and company information.</p></div></div>
+                    <div class="card profile-card">
+                        <form id="profileForm" class="form-grid">
+                            <label>Full Name<input id="profileName" maxlength="80" required></label>
+                            <label>Email Address<input id="profileEmail" type="email" readonly></label>
+                            <label>Phone Number<input id="profilePhone" type="tel" maxlength="25" inputmode="tel"></label>
+                            <label>Company / Organization<input id="profileCompany" maxlength="120"></label>
+                            <label class="wide">Address<input id="profileAddress" maxlength="250"></label>
+                            <button class="primary wide">Save Profile Changes</button>
+                            <p id="profileMessage" class="message wide"></p>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Lets every signed-in user manage account security -->
+                <section id="security" class="section">
+                    <div class="page-head">
+                        <div>
+                            <h1>Account &amp; Security</h1>
+                            <p>Review your sign-in security, change your password, or request a password-reset email.</p>
+                        </div>
+                    </div>
+
+                    <div class="security-grid">
+                        <div class="card security-summary-card">
+                            <div class="security-card-head">
+                                <div>
+                                    <h2>Security Overview</h2>
+                                    <p class="helper-text">These details come from your currently signed-in Firebase account.</p>
+                                </div>
+                                <span class="security-shield" aria-hidden="true">✓</span>
+                            </div>
+
+                            <div class="security-details">
+                                <div><span>Email</span><strong id="securityEmail">—</strong></div>
+                                <div><span>Account role</span><strong id="securityRole">—</strong></div>
+                                <div><span>Authenticator</span><strong id="securityMfaStatus">—</strong></div>
+                                <div><span>Email OTP</span><strong id="securityEmailOtpStatus">Available</strong></div>
+                                <div><span>Last sign-in</span><strong id="securityLastSignIn">—</strong></div>
+                            </div>
+
+                            <div class="security-reset-box">
+                                <div>
+                                    <strong>Forgot your current password?</strong>
+                                    <p class="helper-text">Send a Firebase password-reset link to your account email.</p>
+                                </div>
+                                <button id="sendResetPasswordBtn" type="button" class="secondary">Send Reset Email</button>
+                            </div>
+                            <p id="securityResetMessage" class="message"></p>
+                        </div>
+
+                        <div class="card security-password-card">
+                            <h2>Change Password</h2>
+                            <p class="helper-text">For security, XTECH verifies your current password and may also request your Authenticator code before changing it.</p>
+
+                            <form id="changePasswordForm" class="form-grid security-password-form">
+                                <label class="wide">Current Password
+                                    <div class="password-wrap">
+                                        <input id="currentPassword" type="password" autocomplete="current-password" maxlength="128" required>
+                                        <button type="button" class="password-toggle" data-target="currentPassword" aria-label="Show password">Show</button>
+                                    </div>
+                                </label>
+
+                                <label>New Password
+                                    <div class="password-wrap">
+                                        <input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+                                        <button type="button" class="password-toggle" data-target="newPassword" aria-label="Show password">Show</button>
+                                    </div>
+                                </label>
+
+                                <label>Confirm New Password
+                                    <div class="password-wrap">
+                                        <input id="confirmNewPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+                                        <button type="button" class="password-toggle" data-target="confirmNewPassword" aria-label="Show password">Show</button>
+                                    </div>
+                                </label>
+
+                                <div class="wide password-requirements" aria-label="Password requirements">
+                                    <strong>New password requirements</strong>
+                                    <span>At least 8 characters</span>
+                                    <span>At least 1 uppercase letter</span>
+                                    <span>At least 1 lowercase letter</span>
+                                    <span>At least 1 number</span>
+                                </div>
+
+                                <label id="changePasswordTotpWrap" class="wide hidden">Authenticator Code
+                                    <input id="changePasswordTotpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="6-digit code">
+                                    <span class="helper-text">Enter the current code from your authenticator app to finish the password change.</span>
+                                </label>
+
+                                <button id="changePasswordBtn" class="primary wide" type="submit">Change Password</button>
+                                <p id="changePasswordMessage" class="message wide"></p>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Opens the XTECH AI manual from a floating chat bubble -->
+        <button id="aiBubble" class="ai-bubble" type="button" aria-label="Open XTECH Help Assistant" title="XTECH Help Assistant">
+            <span class="ai-bubble-icon">✦</span>
+            <span class="ai-bubble-label">Help</span>
+        </button>
+
+        <!-- Shows the AI Help Assistant as a popup panel -->
+        <aside id="aiChatPanel" class="ai-chat-panel hidden" aria-label="XTECH Help Assistant">
+            <div class="ai-chat-header">
+                <div>
+                    <strong>XTECH Help Assistant</strong>
+                    <span id="aiContextLabel">Context: XTECH Automation</span>
+                </div>
+                <div class="ai-chat-header-actions">
+                    <button id="clearChat" class="ai-header-btn" type="button">Clear</button>
+                    <button id="closeAiChat" class="ai-header-btn ai-close-btn" type="button" aria-label="Close AI Help Assistant">×</button>
+                </div>
+            </div>
+            <div id="aiQuickActions" class="ai-quick-actions" aria-label="Suggested XTECH questions"></div>
+            <div id="chatMessages" class="chat-messages" aria-live="polite">
+                <div class="chat-message assistant"><div class="chat-bubble">Hello! I’m the XTECH Help Assistant. Ask me how to use inventory, pickups, sales, reports, customer features, or your account.</div></div>
+            </div>
+            <form id="chatForm" class="chat-form">
+                <label class="chat-input-label" for="chatInput">Ask about XTECH Automation</label>
+                <div class="chat-input-row">
+                    <textarea id="chatInput" rows="2" maxlength="1500" placeholder="Example: How do I stock in a product?" required></textarea>
+                    <button id="chatSend" class="primary" type="submit">Send</button>
+                </div>
+            </form>
+        </aside>
+    </div>
+
+    <!-- Shows a loading screen while requests are running -->
+    <div id="loadingOverlay" class="loading-overlay hidden"><div class="spinner"></div><span>Loading…</span></div>
+
+    <!-- Shows popup forms and information -->
+    <div id="modal" class="modal hidden">
+        <div class="modal-card">
+            <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Shows short notification messages -->
+    <div id="toast"></div>
+    <!-- Loads the frontend JavaScript that controls the application -->
+    <script src="js/app.js"></script>
+</body>
+</html>

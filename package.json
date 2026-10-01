@@ -1,0 +1,23 @@
+{
+  "name": "xtech-automation",
+  "version": "2.5.0",
+  "description": "XTECH Automation inventory, pickup and sales monitoring system",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node --watch backend/server.js",
+    "seed:admin": "node backend/seed-admin.js",
+    "test": "node scripts/validate.js",
+    "check": "node scripts/validate.js",
+    "enable:totp": "node scripts/enable-totp.js",
+    "cleanup:v18": "node scripts/cleanup-v18-data.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.23.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "firebase": "^12.18.0",
+    "firebase-admin": "^14.3.0",
+    "nodemailer": "^7.0.6"
+  }
+}

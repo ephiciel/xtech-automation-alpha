@@ -1,0 +1,101 @@
+XTECH AUTOMATION CHANGELOG
+
+Version 18
+----------
+Quantity-Only Sales and Reporting
+- Removed monetary values and financial calculations from the application workflow.
+- Sales records now focus on products, quantities, customer, status, notes, dates, and processed-by information.
+- Replaced dashboard monetary sales metrics with Total Units Sold.
+- Replaced the 7-day monetary sales chart with Units Sold - Last 7 Days.
+- Removed monetary columns from sales history, sale details, inventory reports, sales reports, CSV exports, and print/PDF output.
+- Sales report summaries now show transaction count, confirmed sales, units sold, and distinct products sold.
+- The backend no longer writes monetary fields to new product or sales records.
+- Legacy monetary fields from older records are stripped from API responses used by the current application.
+- Added an optional one-time cleanup command to permanently remove those legacy fields from existing Firestore product and sales records.
+- Updated the AI Help Assistant manual for the quantity-only workflow.
+- Financial handling remains outside XTECH Automation.
+
+Version 17
+----------
+Email OTP Sign-In
+- Replaced the previous Email Link sign-in option with Email OTP.
+- Users can now choose between Password + Authenticator and Email OTP.
+- Email OTP sends a 6-digit one-time code to the registered email address.
+- Users enter the code directly on the XTECH website before access is granted.
+- Added SMTP email delivery using Nodemailer.
+- Email OTP codes are stored only as secure hashes in Firestore.
+- Codes are single-use and expire after 10 minutes by default.
+- Added a 60-second resend cooldown by default.
+- Added a 5-attempt limit for incorrect codes.
+- Successful Email OTP verification creates a Firebase custom sign-in token for the existing account.
+- Successful Email OTP verification marks the Firebase email as verified.
+- Added Email OTP status to Account & Security.
+- Updated the AI Help Assistant manual and authentication guidance for Email OTP.
+- Firebase Email Link authentication is no longer required for this sign-in method.
+
+Version 16
+----------
+AI Help Assistant
+- Updated the XTECH AI manual for current authentication, validation, reports, pickup stock checks, and account security.
+- Added current-page awareness.
+- Added page-specific suggested questions.
+- Added a typing indicator.
+- Added Copy buttons to assistant answers.
+- Prevented AI requests from triggering the full-page loading overlay.
+- Improved role-aware instructions and troubleshooting.
+- Retained per-user Firestore chat history and Clear Chat behavior.
+
+Version 15
+----------
+Account & Security
+- Added an Account & Security page for all signed-in roles.
+- Added password change functionality using Firebase Authentication.
+- Users must verify their current password before changing it.
+- TOTP-protected accounts may require the current 6-digit Authenticator code.
+- Added stronger password requirements.
+- Added Send Reset Email for forgotten passwords.
+- Users are signed out after a successful password change.
+
+Version 14
+----------
+Pickup Stock Synchronization
+- Admin inventory quantity is the authoritative stock value.
+- Pickup quantities cannot exceed current stock.
+- Stock is rechecked before add, submit, approve, and complete actions.
+- Backend stock checks run inside Firestore transactions.
+- Pickup completion deducts inventory only after the final stock check.
+
+Version 13
+----------
+Reports
+- Improved Print / Save PDF output.
+- Added clean report-only printing.
+- Added report branding, dates, generated-by information, row count, summaries, and report tables.
+- Inventory and Stock Movement reports use landscape printing.
+- Sales and Pickup reports use portrait printing.
+- CSV export now uses the currently selected report.
+- Reports refresh before export if date filters changed.
+
+Version 12
+----------
+Authentication
+- Added Password + Authenticator sign-in.
+- Added TOTP MFA enrollment and verification.
+- Added Firebase Authentication with Identity Platform support.
+- Added the enable:totp setup script.
+
+Version 11
+----------
+Validation
+- Added stronger frontend and backend validation.
+- Improved email validation, including malformed duplicated domain endings.
+- Added name, phone, field-length, quantity, date, product, pickup, sales, staff-account, and profile validation.
+
+Setup Notes
+-----------
+- Run npm.cmd install after updating to V17 because Nodemailer was added.
+- Keep .env in the project root.
+- Keep backend/serviceAccountKey.json private.
+- Configure SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, and MAIL_FROM for Email OTP.
+- If Gmail is used, use a Gmail App Password for SMTP_PASS.
+- Run npm.cmd start to start XTECH.
