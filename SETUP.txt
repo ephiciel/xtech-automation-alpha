@@ -1,0 +1,197 @@
+XTECH AUTOMATION - CLASSMATE SETUP GUIDE
+========================================
+
+Repository
+----------
+https://github.com/ephiciel/xtech-automation-alpha.git
+
+1. GET ACCESS
+-------------
+The repository is private.
+
+The repository owner must add your GitHub account as a collaborator:
+GitHub Repository > Settings > Collaborators > Add people
+
+Accept the invitation before cloning.
+
+2. INSTALL REQUIRED SOFTWARE
+----------------------------
+Install:
+- Git
+- Node.js
+- Visual Studio Code or Visual Studio (optional, but recommended)
+
+Check Git:
+  git --version
+
+Check Node.js:
+  node --version
+
+Check npm:
+  npm.cmd --version
+
+3. CLONE THE PROJECT
+--------------------
+Open PowerShell and run:
+
+  git clone https://github.com/ephiciel/xtech-automation-alpha.git
+  cd xtech-automation-alpha
+
+4. INSTALL DEPENDENCIES
+-----------------------
+Run:
+
+  npm.cmd install
+
+5. LOCAL ENVIRONMENT FILE
+-------------------------
+Create your own local .env file from the template:
+
+  Copy-Item .env.example .env
+
+The real .env file is intentionally not stored on GitHub.
+Ask the project owner for the required development values through a private method.
+
+Never commit or share real:
+- Firebase credentials
+- Gemini API keys
+- SMTP usernames/passwords
+- Gmail App Passwords
+- Other secrets
+
+6. FIREBASE ADMIN CREDENTIAL
+----------------------------
+Full local testing requires:
+
+  backend/serviceAccountKey.json
+
+Obtain the development service-account file privately from the project owner.
+Do not upload it to GitHub or group chats.
+
+7. START XTECH
+--------------
+Run:
+
+  npm.cmd start
+
+Then open the localhost address shown by the server, normally:
+
+  http://localhost:3000
+
+Stop the server with:
+
+  Ctrl + C
+
+8. CODE REVIEW ONLY
+-------------------
+If you only need to inspect the code, you do NOT need:
+- .env
+- backend/serviceAccountKey.json
+
+These are only needed when running the complete system locally.
+
+9. CREATE A BRANCH BEFORE CHANGING CODE
+---------------------------------------
+Do not normally edit the main branch directly.
+
+Run:
+
+  git switch main
+  git pull origin main
+  git switch -c feature/short-description
+
+Example:
+
+  git switch -c feature/inventory-testing
+
+10. SAVE AND PUSH YOUR CHANGES
+------------------------------
+Before committing, run:
+
+  npm.cmd test
+  git status
+
+Then:
+
+  git add .
+  git commit -m "Describe your changes"
+  git push -u origin feature/short-description
+
+Example:
+
+  git add .
+  git commit -m "Improve inventory validation"
+  git push -u origin feature/inventory-testing
+
+Create a Pull Request on GitHub and request review before merging into main.
+
+11. AFTER A PULL REQUEST IS MERGED
+----------------------------------
+Update your local main branch:
+
+  git switch main
+  git pull origin main
+
+Then create a new branch for the next task.
+
+12. NEVER COMMIT THESE FILES
+----------------------------
+  .env
+  backend/serviceAccountKey.json
+  serviceAccountKey.json
+  node_modules/
+  .vs/
+
+The repository should include .env.example only, with placeholder values.
+
+13. IMPORTANT COMMANDS
+----------------------
+Start the app:
+  npm.cmd start
+
+Run validation:
+  npm.cmd test
+
+Development mode:
+  npm.cmd run dev
+
+Enable TOTP for a NEW Firebase project only:
+  npm.cmd run enable:totp
+
+WARNING: Do not run this during normal setup if the shared Firebase project is already configured.
+
+Permanent V18 database cleanup:
+  npm.cmd run cleanup:v18 -- --confirm
+
+WARNING: This permanently removes legacy monetary fields from Firestore. Do not run it casually.
+
+14. BASIC TROUBLESHOOTING
+-------------------------
+If npm.ps1 is blocked in PowerShell, use npm.cmd instead of npm.
+
+If package modules are missing:
+  npm.cmd install
+
+If .env is missing:
+  Copy-Item .env.example .env
+
+If Firebase Admin reports that serviceAccountKey.json is missing:
+Place the correct development key at:
+  backend/serviceAccountKey.json
+
+If you get authentication/config errors:
+Check that your local .env contains the required Firebase configuration values.
+
+If Email OTP does not send:
+Check the SMTP settings in .env.
+
+If AI Help does not respond:
+Check the Gemini API configuration in .env.
+
+15. TEAM RULE
+-------------
+main = reviewed/stable code
+feature branches = individual work
+Pull Requests = review before merge
+
+Do not commit secrets.

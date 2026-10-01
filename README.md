@@ -73,6 +73,139 @@ The new `npm.cmd install` step is required because V17 adds the `nodemailer` pac
 - Added explicit guidance for V14 pickup stock synchronization and V15 password/security features.
 - Existing per-user Firestore chat history and Clear Chat behavior are retained.
 
+
+## Team setup and GitHub workflow
+
+Repository:
+
+```text
+https://github.com/ephiciel/xtech-automation-alpha.git
+```
+
+### For classmates who only want to review the code
+
+1. Ask the repository owner to add your GitHub account as a collaborator.
+2. Accept the GitHub invitation.
+3. Clone the repository:
+
+   ```powershell
+   git clone https://github.com/ephiciel/xtech-automation-alpha.git
+   ```
+
+4. Enter the project folder:
+
+   ```powershell
+   cd xtech-automation-alpha
+   ```
+
+You can now inspect the source code without `.env` or `serviceAccountKey.json`.
+
+### For classmates who need to run XTECH locally
+
+1. Install Git and Node.js.
+2. Clone the repository and enter the project folder.
+3. Install dependencies:
+
+   ```powershell
+   npm.cmd install
+   ```
+
+4. Create a local `.env` from the included template:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+5. Fill in the required values in `.env`. Obtain development credentials privately from the project owner. Never commit or post these values publicly.
+6. Place the Firebase Admin service-account file here:
+
+   ```text
+   backend/serviceAccountKey.json
+   ```
+
+7. Start the project:
+
+   ```powershell
+   npm.cmd start
+   ```
+
+8. Open the localhost address shown by the server, normally:
+
+   ```text
+   http://localhost:3000
+   ```
+
+9. Stop the server with `Ctrl + C`.
+
+### Files that must never be committed
+
+The repository `.gitignore` protects these files. Do not force-add them:
+
+```text
+.env
+backend/serviceAccountKey.json
+serviceAccountKey.json
+node_modules/
+.vs/
+```
+
+The repository should contain `.env.example`, but it must contain placeholders only and no real passwords, API keys, SMTP credentials, or service-account data.
+
+### Recommended branch workflow
+
+Do not make normal feature changes directly on `main`.
+
+Before starting new work:
+
+```powershell
+git switch main
+git pull origin main
+git switch -c feature/short-description
+```
+
+Example:
+
+```powershell
+git switch -c feature/report-improvements
+```
+
+After making changes:
+
+```powershell
+git status
+git add .
+git commit -m "Improve report generation"
+git push -u origin feature/report-improvements
+```
+
+Then open GitHub and create a Pull Request from the feature branch into `main`. The repository owner should review the changes before merging.
+
+After a Pull Request is merged, update the local copy:
+
+```powershell
+git switch main
+git pull origin main
+```
+
+### Before every commit
+
+Run:
+
+```powershell
+npm.cmd test
+git status
+```
+
+Check that `.env`, `serviceAccountKey.json`, `node_modules`, and `.vs` are not staged.
+
+### Important project-wide setup notes
+
+- `npm.cmd run enable:totp` changes the Firebase project's TOTP configuration. Classmates normally do **not** need to run it when using the same already-configured Firebase project.
+- `npm.cmd run cleanup:v18 -- --confirm` permanently removes legacy monetary fields from Firestore. Do **not** run this casually or as part of normal setup.
+- Email OTP requires valid SMTP settings in the local `.env` file.
+- Gemini AI features require the Gemini API configuration in `.env`.
+- Full local testing requires access to the project's Firebase development credentials. Code review alone does not.
+
 ## Run the project
 
 1. Run `npm.cmd install` after extracting the project on a new computer.
