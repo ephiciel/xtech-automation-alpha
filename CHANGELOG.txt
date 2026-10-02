@@ -1,5 +1,18 @@
 XTECH AUTOMATION CHANGELOG
 
+Version 20
+----------
+Verified Contact Validation
+- Strengthened email syntax validation for multiple @ symbols, repeated periods, duplicated endings, and common concatenated ending mistakes such as .comcom.
+- Added backend DNS/mail-domain checking before saving new account and customer email addresses.
+- Customer self-registration now stays pending until the user enters the 6-digit code sent to the email address.
+- Successful registration OTP verification marks the Firebase email as verified, activates the XTECH account, and activates the linked customer profile.
+- Email OTP resend continues to work for pending registrations and retains the V19 live cooldown behavior.
+- Philippine mobile numbers are limited to 09XXXXXXXXX or +639XXXXXXXXX format.
+- Accepted Philippine mobile numbers are normalized to +63 format before saving.
+- Obvious repeated-digit and simple sequential placeholder mobile numbers are rejected.
+- The same important validation is enforced in both the frontend and backend.
+
 Version 19
 ----------
 Login Recovery and Email OTP Cooldown

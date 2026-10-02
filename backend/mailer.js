@@ -71,27 +71,32 @@ function maskEmail(email) {
     return `${visible}${"*".repeat(Math.max(2, local.length - visible.length))}@${domain}`;
 }
 
-async function sendOtpEmail(email, code) {
+async function sendOtpEmail(email, code, purpose = "signin") {
     const smtpUser = String(process.env.SMTP_USER || "").trim();
     const from = String(process.env.MAIL_FROM || "").trim() || `XTECH Automation <${smtpUser}>`;
     const minutes = otpExpiryMinutes();
 
+    const registration = purpose === "registration";
+    const action = registration ? "finish your XTECH registration" : "sign in to XTECH";
+    const subject = registration ? "Verify your XTECH registration" : "Your XTECH sign-in code";
+
     await getTransporter().sendMail({
         from,
         to: email,
-        subject: "Your XTECH sign-in code",
+        subject,
         text: [
             "XTECH Automation",
             "",
-            `Your sign-in code is: ${code}`,
+            `Your verification code is: ${code}`,
             "",
+            `Use this code to ${action}.`,
             `This code expires in ${minutes} minutes and can only be used once.`,
             "If you did not request this code, you can ignore this email."
         ].join("\n"),
         html: `
             <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#111827">
                 <h2 style="margin-bottom:8px">XTECH Automation</h2>
-                <p style="margin-top:0;color:#4b5563">Use this verification code to sign in:</p>
+                <p style="margin-top:0;color:#4b5563">Use this verification code to ${action}:</p>
                 <div style="font-size:34px;font-weight:700;letter-spacing:8px;padding:18px 20px;background:#f3f4f6;border-radius:12px;text-align:center">${code}</div>
                 <p style="color:#4b5563">This code expires in ${minutes} minutes and can only be used once.</p>
                 <p style="color:#6b7280;font-size:13px">If you did not request this code, you can ignore this email.</p>

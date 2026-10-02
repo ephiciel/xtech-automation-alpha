@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const path = require("path");
+const dns = require("dns").promises;
 const { db, auth, Timestamp } = require("./firebase");
 const XTECH_MANUAL = require("./xtechManual");
 const {
@@ -98,27 +99,74 @@ function isValidEmailAddress(value) {
         if (label.startsWith("-") || label.endsWith("-")) return false;
     }
 
-    const tld = labels.at(-1);
+    const tld = labels.at(-1).toLowerCase();
     if (!/^[a-z]{2,24}$/i.test(tld)) return false;
 
-    // Reject obvious duplicated endings such as gmail.com.com while allowing domains like example.com.ph.
+    const commonEndings = ["com", "net", "org", "edu", "gov", "mil", "ph", "io", "co"];
     const repeatedEnding = labels.length >= 3 &&
         labels.at(-1).toLowerCase() === labels.at(-2).toLowerCase() &&
-        new Set(["com", "net", "org", "edu", "gov", "mil", "ph", "io", "co"]).has(labels.at(-1).toLowerCase());
+        commonEndings.includes(tld);
 
-    return !repeatedEnding;
+    // Catch common typing mistakes such as gmail.comcom, gmail.netnet, and gmail.phph.
+    const concatenatedEnding = commonEndings.some(ending => tld === ending + ending);
+
+    return !repeatedEnding && !concatenatedEnding;
+}
+
+const emailDomainCache = new Map();
+
+async function emailDomainCanReceiveMail(value) {
+    const email = normalizedEmail(value);
+    if (!isValidEmailAddress(email)) return false;
+    const domain = email.split("@")[1];
+    const cached = emailDomainCache.get(domain);
+    if (cached && cached.expiresAt > Date.now()) return cached.valid;
+
+    let valid = false;
+    try {
+        const mx = await dns.resolveMx(domain);
+        valid = Array.isArray(mx) && mx.some(record => record && record.exchange);
+    } catch {
+        // RFC-compatible fallback: a mail domain can still resolve directly without an MX record.
+        try {
+            const addresses = await dns.resolve(domain);
+            valid = Array.isArray(addresses) && addresses.length > 0;
+        } catch (dnsError) {
+            const definitiveMissingDomain = ["ENOTFOUND", "ENODATA", "ENODOMAIN"].includes(dnsError.code);
+            if (definitiveMissingDomain) {
+                valid = false;
+            } else {
+                // Do not block legitimate users during a temporary DNS/network resolver outage.
+                console.warn(`Email-domain DNS check skipped for ${domain}: ${dnsError.code || dnsError.message}`);
+                valid = true;
+            }
+        }
+    }
+
+    emailDomainCache.set(domain, { valid, expiresAt: Date.now() + (10 * 60 * 1000) });
+    return valid;
+}
+
+function normalizePhilippineMobile(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (!/^[+0-9() .-]+$/.test(raw)) return null;
+
+    const compact = raw.replace(/[() .-]/g, "");
+    let normalized = null;
+    if (/^09\d{9}$/.test(compact)) normalized = `+63${compact.slice(1)}`;
+    if (/^\+639\d{9}$/.test(compact)) normalized = compact;
+    if (!normalized) return null;
+
+    const subscriber = normalized.replace(/\D/g, "").slice(3); // digits after 639
+    if (/^(\d)\1{8}$/.test(subscriber)) return null;
+    if (["123456789", "987654321", "000000000"].includes(subscriber)) return null;
+
+    return normalized;
 }
 
 function isValidPhone(value) {
-    const phone = String(value || "").trim();
-    if (!phone) return true;
-    if (phone.length > 25 || !/^[+0-9() .-]+$/.test(phone)) return false;
-
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 7 || digits.length > 15) return false;
-    if (/^(\d)\1+$/.test(digits)) return false;
-
-    return true;
+    return normalizePhilippineMobile(value) !== null;
 }
 
 function isValidOptionalText(value, maxLength) {
@@ -289,7 +337,57 @@ app.get("/api/auth/me", authRequired, (req, res) => {
     res.json({ success: true, user: serialize(req.user), profile: serialize(req.profile) });
 });
 
-// Sends a short-lived 6-digit sign-in code to an existing XTECH account
+// Creates and emails a short-lived code for sign-in or registration verification
+async function issueEmailOtp(userRecord, email, purpose = "signin") {
+    const challengeRef = db.collection("emailOtpChallenges").doc(emailChallengeId(email));
+    const existing = await challengeRef.get();
+    const currentTime = Date.now();
+    const resendSeconds = otpResendSeconds();
+
+    if (existing.exists) {
+        const lastSentAt = existing.data().lastSentAt;
+        const lastSentMs = lastSentAt?.toMillis ? lastSentAt.toMillis() : 0;
+        const secondsSinceLastSend = Math.floor((currentTime - lastSentMs) / 1000);
+        if (lastSentMs && secondsSinceLastSend < resendSeconds) {
+            const waitSeconds = resendSeconds - secondsSinceLastSend;
+            const error = new Error(`Please wait ${waitSeconds} second${waitSeconds === 1 ? "" : "s"} before requesting another code.`);
+            error.status = 429;
+            error.retryAfterSeconds = waitSeconds;
+            throw error;
+        }
+    }
+
+    const code = generateOtpCode();
+    const { salt, hash } = createOtpHash(code);
+    const expiryMinutes = otpExpiryMinutes();
+
+    await challengeRef.set({
+        uid: userRecord.uid,
+        email,
+        purpose,
+        codeHash: hash,
+        salt,
+        attemptsRemaining: 5,
+        createdAt: now(),
+        lastSentAt: now(),
+        expiresAt: Timestamp.fromMillis(currentTime + (expiryMinutes * 60 * 1000))
+    });
+
+    try {
+        await sendOtpEmail(email, code, purpose);
+    } catch (error) {
+        await challengeRef.delete().catch(() => {});
+        throw error;
+    }
+
+    return {
+        maskedEmail: maskEmail(email),
+        expiresInSeconds: expiryMinutes * 60,
+        resendAfterSeconds: resendSeconds
+    };
+}
+
+// Sends a short-lived 6-digit code to an existing XTECH account
 app.post("/api/auth/email-otp/request", async (req, res) => {
     const email = normalizedEmail(req.body.email);
 
@@ -301,70 +399,31 @@ app.post("/api/auth/email-otp/request", async (req, res) => {
         const userRecord = await auth.getUserByEmail(email);
         const profileSnap = await db.collection("users").doc(userRecord.uid).get();
         const accountProfile = profileSnap.exists ? profileSnap.data() : null;
+        const registrationPending = accountProfile?.registrationPending === true;
 
-        if (accountProfile?.active === false || userRecord.disabled) {
+        if (!registrationPending && (accountProfile?.active === false || userRecord.disabled)) {
             return res.status(403).json({ success: false, message: "This XTECH account has been deactivated." });
         }
 
-        const challengeRef = db.collection("emailOtpChallenges").doc(emailChallengeId(email));
-        const existing = await challengeRef.get();
-        const currentTime = Date.now();
-        const resendSeconds = otpResendSeconds();
-
-        if (existing.exists) {
-            const lastSentAt = existing.data().lastSentAt;
-            const lastSentMs = lastSentAt?.toMillis ? lastSentAt.toMillis() : 0;
-            const secondsSinceLastSend = Math.floor((currentTime - lastSentMs) / 1000);
-
-            if (lastSentMs && secondsSinceLastSend < resendSeconds) {
-                const waitSeconds = resendSeconds - secondsSinceLastSend;
-                return res.status(429).json({
-                    success: false,
-                    message: `Please wait ${waitSeconds} second${waitSeconds === 1 ? "" : "s"} before requesting another code.`,
-                    retryAfterSeconds: waitSeconds
-                });
-            }
-        }
-
-        const code = generateOtpCode();
-        const { salt, hash } = createOtpHash(code);
-        const expiryMinutes = otpExpiryMinutes();
-
-        await challengeRef.set({
-            uid: userRecord.uid,
-            email,
-            codeHash: hash,
-            salt,
-            attemptsRemaining: 5,
-            createdAt: now(),
-            lastSentAt: now(),
-            expiresAt: Timestamp.fromMillis(currentTime + (expiryMinutes * 60 * 1000))
-        });
-
-        try {
-            await sendOtpEmail(email, code);
-        } catch (mailError) {
-            await challengeRef.delete().catch(() => {});
-            console.error("Email OTP delivery error:", mailError.message);
-            return res.status(500).json({
-                success: false,
-                message: "XTECH could not send the sign-in code. Check the SMTP settings in .env and try again."
-            });
-        }
-
+        const purpose = registrationPending ? "registration" : "signin";
+        const otp = await issueEmailOtp(userRecord, email, purpose);
         return res.json({
             success: true,
-            maskedEmail: maskEmail(email),
-            expiresInSeconds: expiryMinutes * 60,
-            resendAfterSeconds: resendSeconds,
-            message: `A 6-digit sign-in code was sent to ${maskEmail(email)}.`
+            ...otp,
+            registrationPending,
+            message: registrationPending
+                ? `A 6-digit registration verification code was sent to ${otp.maskedEmail}.`
+                : `A 6-digit sign-in code was sent to ${otp.maskedEmail}.`
         });
     } catch (error) {
         if (error.code === "auth/user-not-found") {
             return res.status(404).json({ success: false, message: "No XTECH account was found for this email. Register or ask an administrator to create the account first." });
         }
+        if (error.status === 429) {
+            return res.status(429).json({ success: false, message: error.message, retryAfterSeconds: error.retryAfterSeconds });
+        }
         console.error("Email OTP request error:", error.message);
-        return res.status(500).json({ success: false, message: "Could not create an email sign-in code." });
+        return res.status(500).json({ success: false, message: "Could not create or send the email code. Check the SMTP settings and try again." });
     }
 });
 
@@ -387,7 +446,7 @@ app.post("/api/auth/email-otp/verify", async (req, res) => {
             const challengeSnap = await transaction.get(challengeRef);
 
             if (!challengeSnap.exists) {
-                return { ok: false, status: 400, message: "This sign-in code is no longer available. Request a new code." };
+                return { ok: false, status: 400, message: "This email code is no longer available. Request a new code." };
             }
 
             const challenge = challengeSnap.data();
@@ -396,33 +455,30 @@ app.post("/api/auth/email-otp/verify", async (req, res) => {
 
             if (!expiryMs || Date.now() > expiryMs) {
                 transaction.delete(challengeRef);
-                return { ok: false, status: 400, message: "This sign-in code has expired. Request a new code." };
+                return { ok: false, status: 400, message: "This email code has expired. Request a new code." };
             }
 
             if (attemptsRemaining <= 0) {
                 transaction.delete(challengeRef);
-                return { ok: false, status: 429, message: "Too many incorrect attempts. Request a new sign-in code." };
+                return { ok: false, status: 429, message: "Too many incorrect attempts. Request a new email code." };
             }
 
             if (!verifyOtpHash(code, challenge.salt, challenge.codeHash)) {
                 const remaining = attemptsRemaining - 1;
-                if (remaining <= 0) {
-                    transaction.delete(challengeRef);
-                } else {
-                    transaction.update(challengeRef, { attemptsRemaining: remaining });
-                }
+                if (remaining <= 0) transaction.delete(challengeRef);
+                else transaction.update(challengeRef, { attemptsRemaining: remaining });
 
                 return {
                     ok: false,
                     status: remaining > 0 ? 400 : 429,
                     message: remaining > 0
-                        ? `Incorrect sign-in code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
-                        : "Too many incorrect attempts. Request a new sign-in code."
+                        ? `Incorrect email code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
+                        : "Too many incorrect attempts. Request a new email code."
                 };
             }
 
             transaction.delete(challengeRef);
-            return { ok: true, uid: challenge.uid };
+            return { ok: true, uid: challenge.uid, purpose: challenge.purpose || "signin" };
         });
 
         if (!verification.ok) {
@@ -430,34 +486,52 @@ app.post("/api/auth/email-otp/verify", async (req, res) => {
         }
 
         const userRecord = await auth.getUser(verification.uid);
-        const profileSnap = await db.collection("users").doc(verification.uid).get();
+        const profileRef = db.collection("users").doc(verification.uid);
+        const profileSnap = await profileRef.get();
         const accountProfile = profileSnap.exists ? profileSnap.data() : null;
+        const completingRegistration = verification.purpose === "registration" || accountProfile?.registrationPending === true;
 
-        if (accountProfile?.active === false || userRecord.disabled) {
-            return res.status(403).json({ success: false, message: "This XTECH account has been deactivated." });
+        if (completingRegistration) {
+            const timestamp = now();
+            await auth.updateUser(verification.uid, { emailVerified: true, disabled: false });
+            await profileRef.set({ active: true, registrationPending: false, emailVerifiedAt: timestamp, updatedAt: timestamp }, { merge: true });
+            if (accountProfile?.customerID) {
+                await db.collection("customers").doc(accountProfile.customerID).set({
+                    active: true,
+                    registrationPending: false,
+                    emailVerifiedAt: timestamp,
+                    updatedAt: timestamp
+                }, { merge: true });
+            }
+        } else {
+            if (accountProfile?.active === false || userRecord.disabled) {
+                return res.status(403).json({ success: false, message: "This XTECH account has been deactivated." });
+            }
+            if (!userRecord.emailVerified) {
+                await auth.updateUser(verification.uid, { emailVerified: true });
+            }
         }
 
-        // Receiving the email code proves control of the registered email address.
-        if (!userRecord.emailVerified) {
-            await auth.updateUser(verification.uid, { emailVerified: true });
-        }
-
-        const customToken = await auth.createCustomToken(verification.uid, { xtechEmailOtp: true });
-        return res.json({ success: true, customToken });
+        const customToken = await auth.createCustomToken(verification.uid, {
+            xtechEmailOtp: true,
+            registrationVerified: completingRegistration
+        });
+        return res.json({ success: true, customToken, registrationCompleted: completingRegistration });
     } catch (error) {
         console.error("Email OTP verification error:", error.message);
         return res.status(error.status || 500).json({
             success: false,
-            message: error.message || "Could not verify the email sign-in code."
+            message: error.message || "Could not verify the email code."
         });
     }
 });
 
+// Creates a pending customer account and requires email OTP verification before activation
 app.post("/api/auth/register-customer", async (req, res) => {
     const name = String(req.body.name || "").trim();
     const email = normalizedEmail(req.body.email);
     const password = String(req.body.password || "");
-    const phone = String(req.body.phone || "").trim();
+    const phone = normalizePhilippineMobile(req.body.phone);
     const company = String(req.body.company || "").trim();
     const address = String(req.body.address || "").trim();
 
@@ -465,10 +539,13 @@ app.post("/api/auth/register-customer", async (req, res) => {
         return res.status(400).json({ success: false, message: "Enter a valid full name using letters, spaces, apostrophes, periods, or hyphens." });
     }
     if (!isValidEmailAddress(email)) {
-        return res.status(400).json({ success: false, message: "Enter a valid email address. Check for mistakes such as duplicated endings like .com.com." });
+        return res.status(400).json({ success: false, message: "Enter a valid email address. Check for extra @ signs, repeated dots, and endings such as .comcom or .com.com." });
     }
-    if (!isValidPhone(phone)) {
-        return res.status(400).json({ success: false, message: "Enter a valid phone number with 7 to 15 digits, or leave it blank." });
+    if (!(await emailDomainCanReceiveMail(email))) {
+        return res.status(400).json({ success: false, message: "The email domain could not be verified. Check the address for typing mistakes." });
+    }
+    if (phone === null) {
+        return res.status(400).json({ success: false, message: "Enter a valid Philippine mobile number such as 09171234567 or +639171234567, or leave it blank." });
     }
     if (!isValidOptionalText(company, 120) || !isValidOptionalText(address, 250)) {
         return res.status(400).json({ success: false, message: "Company must be 120 characters or fewer and address must be 250 characters or fewer." });
@@ -478,28 +555,44 @@ app.post("/api/auth/register-customer", async (req, res) => {
     }
 
     let createdUser = null;
+    let customerRef = null;
+    let linkedExistingCustomer = false;
+    let previousCustomerData = null;
+
     try {
         try {
-            await auth.getUserByEmail(email);
+            const existingUser = await auth.getUserByEmail(email);
+            const existingProfile = await db.collection("users").doc(existingUser.uid).get();
+            if (existingProfile.exists && existingProfile.data().registrationPending === true) {
+                const otp = await issueEmailOtp(existingUser, email, "registration");
+                return res.status(200).json({
+                    success: true,
+                    verificationRequired: true,
+                    ...otp,
+                    message: "This registration is still waiting for email verification. A new code was sent."
+                });
+            }
             return res.status(409).json({ success: false, message: "An account with this email already exists." });
         } catch (error) {
             if (error.code !== "auth/user-not-found") throw error;
         }
 
-        createdUser = await auth.createUser({ email, password, displayName: name });
+        createdUser = await auth.createUser({ email, password, displayName: name, disabled: true, emailVerified: false });
         const existingCustomer = await db.collection("customers").where("email", "==", email).limit(1).get();
         const timestamp = now();
-        let customerRef;
 
         if (!existingCustomer.empty) {
             customerRef = existingCustomer.docs[0].ref;
+            previousCustomerData = existingCustomer.docs[0].data();
+            linkedExistingCustomer = true;
             await customerRef.update({
                 name,
-                phone: phone || existingCustomer.docs[0].data().phone || "",
-                company: company || existingCustomer.docs[0].data().company || "",
-                address: address || existingCustomer.docs[0].data().address || "",
+                phone: phone || previousCustomerData.phone || "",
+                company: company || previousCustomerData.company || "",
+                address: address || previousCustomerData.address || "",
                 userUID: createdUser.uid,
-                active: true,
+                active: false,
+                registrationPending: true,
                 updatedAt: timestamp
             });
         } else {
@@ -512,7 +605,8 @@ app.post("/api/auth/register-customer", async (req, res) => {
                 phone,
                 company,
                 address,
-                active: true,
+                active: false,
+                registrationPending: true,
                 createdAt: timestamp,
                 updatedAt: timestamp
             });
@@ -523,19 +617,36 @@ app.post("/api/auth/register-customer", async (req, res) => {
             email,
             name,
             role: "customer",
-            active: true,
+            active: false,
+            registrationPending: true,
             customerID: customerRef.id,
             createdAt: timestamp,
             updatedAt: timestamp
         });
 
-        res.status(201).json({ success: true, message: "Customer account created successfully." });
+        const otp = await issueEmailOtp(createdUser, email, "registration");
+        return res.status(201).json({
+            success: true,
+            verificationRequired: true,
+            ...otp,
+            message: "Account details saved. Enter the 6-digit code sent to your email to finish registration."
+        });
     } catch (error) {
-        console.error(error);
+        console.error("Customer registration error:", error.message);
         if (createdUser) {
             try { await auth.deleteUser(createdUser.uid); } catch {}
+            try { await db.collection("users").doc(createdUser.uid).delete(); } catch {}
         }
-        res.status(500).json({ success: false, message: error.message || "Failed to create customer account." });
+        if (customerRef) {
+            try {
+                if (linkedExistingCustomer && previousCustomerData) await customerRef.set(previousCustomerData);
+                else await customerRef.delete();
+            } catch {}
+        }
+        if (error.status === 429) {
+            return res.status(429).json({ success: false, message: error.message, retryAfterSeconds: error.retryAfterSeconds });
+        }
+        return res.status(500).json({ success: false, message: error.message || "Failed to create customer account." });
     }
 });
 
@@ -563,15 +674,15 @@ app.get("/api/profile", authRequired, roles("customer"), async (req, res) => {
 app.put("/api/profile", authRequired, roles("customer"), async (req, res) => {
     try {
         const name = String(req.body.name || "").trim();
-        const phone = String(req.body.phone || "").trim();
+        const phone = normalizePhilippineMobile(req.body.phone);
         const company = String(req.body.company || "").trim();
         const address = String(req.body.address || "").trim();
 
         if (!isValidName(name)) {
             return res.status(400).json({ success: false, message: "Enter a valid full name using letters, spaces, apostrophes, periods, or hyphens." });
         }
-        if (!isValidPhone(phone)) {
-            return res.status(400).json({ success: false, message: "Enter a valid phone number with 7 to 15 digits, or leave it blank." });
+        if (phone === null) {
+            return res.status(400).json({ success: false, message: "Enter a valid Philippine mobile number such as 09171234567 or +639171234567, or leave it blank." });
         }
         if (!isValidOptionalText(company, 120) || !isValidOptionalText(address, 250)) {
             return res.status(400).json({ success: false, message: "Company must be 120 characters or fewer and address must be 250 characters or fewer." });
@@ -629,7 +740,10 @@ app.post("/api/users", authRequired, roles("admin"), async (req, res) => {
         return res.status(400).json({ success: false, message: "Enter a valid staff name." });
     }
     if (!isValidEmailAddress(email)) {
-        return res.status(400).json({ success: false, message: "Enter a valid email address. Check for mistakes such as duplicated endings like .com.com." });
+        return res.status(400).json({ success: false, message: "Enter a valid email address. Check for extra @ signs, repeated dots, and endings such as .comcom or .com.com." });
+    }
+    if (!(await emailDomainCanReceiveMail(email))) {
+        return res.status(400).json({ success: false, message: "The email domain could not be verified. Check the address for typing mistakes." });
     }
     if (!isValidPassword(password)) {
         return res.status(400).json({ success: false, message: "Password must be between 6 and 128 characters." });
@@ -959,13 +1073,14 @@ app.post("/api/customers", authRequired, roles("admin", "secretary"), async (req
     try {
         const name = String(req.body.name || "").trim();
         const email = normalizedEmail(req.body.email);
-        const phone = String(req.body.phone || "").trim();
+        const phone = normalizePhilippineMobile(req.body.phone);
         const company = String(req.body.company || "").trim();
         const address = String(req.body.address || "").trim();
 
         if (!isValidName(name)) return res.status(400).json({ success: false, message: "Enter a valid customer name." });
-        if (!isValidEmailAddress(email)) return res.status(400).json({ success: false, message: "Enter a valid email address. Check for mistakes such as duplicated endings like .com.com." });
-        if (!isValidPhone(phone)) return res.status(400).json({ success: false, message: "Enter a valid phone number with 7 to 15 digits, or leave it blank." });
+        if (!isValidEmailAddress(email)) return res.status(400).json({ success: false, message: "Enter a valid email address. Check for extra @ signs, repeated dots, and endings such as .comcom or .com.com." });
+        if (!(await emailDomainCanReceiveMail(email))) return res.status(400).json({ success: false, message: "The email domain could not be verified. Check the address for typing mistakes." });
+        if (phone === null) return res.status(400).json({ success: false, message: "Enter a valid Philippine mobile number such as 09171234567 or +639171234567, or leave it blank." });
         if (!isValidOptionalText(company, 120) || !isValidOptionalText(address, 250)) {
             return res.status(400).json({ success: false, message: "Company must be 120 characters or fewer and address must be 250 characters or fewer." });
         }
@@ -1003,13 +1118,14 @@ app.put("/api/customers/:id", authRequired, roles("admin", "secretary"), async (
 
         const name = String(req.body.name || "").trim();
         const email = normalizedEmail(req.body.email);
-        const phone = String(req.body.phone || "").trim();
+        const phone = normalizePhilippineMobile(req.body.phone);
         const company = String(req.body.company || "").trim();
         const address = String(req.body.address || "").trim();
 
         if (!isValidName(name)) return res.status(400).json({ success: false, message: "Enter a valid customer name." });
-        if (!isValidEmailAddress(email)) return res.status(400).json({ success: false, message: "Enter a valid email address. Check for mistakes such as duplicated endings like .com.com." });
-        if (!isValidPhone(phone)) return res.status(400).json({ success: false, message: "Enter a valid phone number with 7 to 15 digits, or leave it blank." });
+        if (!isValidEmailAddress(email)) return res.status(400).json({ success: false, message: "Enter a valid email address. Check for extra @ signs, repeated dots, and endings such as .comcom or .com.com." });
+        if (!(await emailDomainCanReceiveMail(email))) return res.status(400).json({ success: false, message: "The email domain could not be verified. Check the address for typing mistakes." });
+        if (phone === null) return res.status(400).json({ success: false, message: "Enter a valid Philippine mobile number such as 09171234567 or +639171234567, or leave it blank." });
         if (!isValidOptionalText(company, 120) || !isValidOptionalText(address, 250)) {
             return res.status(400).json({ success: false, message: "Company must be 120 characters or fewer and address must be 250 characters or fewer." });
         }

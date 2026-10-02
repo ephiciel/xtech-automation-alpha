@@ -70,9 +70,13 @@ ROLE ACCESS SUMMARY
 
 DATA VALIDATION
 XTECH validates data in the browser and again on the server.
-- Email addresses must use a valid format. Obvious duplicated endings such as johndoe@gmail.com.com are rejected.
+- Email addresses must use one @ symbol, a valid local part, a valid domain structure, and a valid-looking domain ending.
+- Obvious mistakes such as me.test@@gmail.com, me.test@gmail.comcom, repeated periods, and duplicated endings such as .com.com are rejected.
+- When an email is saved for a new account, staff account, or customer record, the backend checks that the email domain can resolve for mail delivery.
+- Customer self-registration is not completed until the user enters the 6-digit code sent to that email address. This proves control of the mailbox.
+- Philippine mobile numbers may be entered as 09XXXXXXXXX or +639XXXXXXXXX and are stored in +63 format.
+- Obvious placeholder mobile numbers with repeated or simple sequential subscriber digits are rejected.
 - Names must be 2 to 80 characters and use normal name characters such as letters, spaces, apostrophes, periods, and hyphens.
-- Optional phone numbers must contain 7 to 15 digits and may use common phone formatting characters.
 - Product IDs must be 2 to 40 characters and use letters, numbers, hyphens, or underscores.
 - Transaction quantities must be positive whole numbers.
 - Pickup dates must be valid dates that are today or later.
@@ -122,12 +126,14 @@ Email OTP security behavior
 
 CUSTOMER REGISTRATION
 1. On the sign-in screen, select Customer Registration.
-2. Enter full name, email, phone number, company/organization, address, and password.
+2. Enter full name, email, Philippine mobile number if applicable, company/organization, address, and password.
 3. Confirm the password.
 4. Select Create Customer Account.
-5. XTECH sends an email-verification message.
-6. Verify the email address before using Password + Authenticator setup.
-7. Return to XTECH and choose Password + Authenticator or Email OTP.
+5. XTECH validates the email format, checks that the email domain can receive mail, and validates the mobile-number format.
+6. XTECH creates the account in a pending state and sends a 6-digit registration verification code to the email address.
+7. Enter the 6-digit code on the XTECH verification screen.
+8. A correct code verifies the email, activates the account, and completes registration.
+9. The user is then signed in through the verified Email OTP flow.
 
 Customer accounts can manage their own profile and create or cancel their own eligible pickup requests.
 
@@ -555,7 +561,13 @@ How do I save a report as PDF?
 Open Reports, select the report and date range, generate it, then select Print / Save PDF. In the browser print dialog, choose Save as PDF.
 
 How does Email OTP sign-in work?
-Select Email OTP, enter the registered email address, and request a code. Enter the 6-digit code from the email on the XTECH verification screen. The code expires after a short time and can only be used once.
+Select Email OTP, enter the registered email address, and request a code. Enter the 6-digit code from the email on the XTECH verification screen. The code expires after a short time and can only be used once. A pending customer registration can also use this flow to verify the email address and activate the account.
+
+Why was my email address rejected?
+XTECH rejects malformed addresses such as addresses with multiple @ symbols, repeated periods, .comcom, or duplicated endings such as .com.com. The backend also checks whether the email domain can resolve for mail delivery. Customer self-registration additionally requires the emailed 6-digit code before the account is activated.
+
+Why was my phone number rejected?
+XTECH accepts Philippine mobile numbers in 09XXXXXXXXX or +639XXXXXXXXX format. It normalizes accepted numbers to +63 format and rejects obvious placeholder patterns.
 
 Why did my Email OTP code fail?
 The code may be incorrect, expired, already used, or locked after too many failed attempts. Request a new code and use the newest email received.

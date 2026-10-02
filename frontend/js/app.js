@@ -105,50 +105,57 @@ function validateEmail(value) {
     }
 
     const parts = email.split("@");
-    if (parts.length !== 2) validationError("Enter a valid email address.");
+    if (parts.length !== 2) validationError("Enter a valid email address. Use only one @ symbol.");
 
     const [local, domain] = parts;
     if (!local || !domain || local.length > 64 || local.startsWith(".") || local.endsWith(".") || local.includes("..")) {
-        validationError("Enter a valid email address.");
+        validationError("Enter a valid email address. Check for missing text or repeated periods.");
     }
     if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(local)) {
         validationError("Enter a valid email address.");
     }
 
     const labels = domain.split(".");
-    if (labels.length < 2) validationError("Enter a valid email address.");
+    if (labels.length < 2) validationError("Enter a complete email domain such as gmail.com.");
 
     for (const label of labels) {
         if (!label || label.length > 63 || !/^[a-z0-9-]+$/i.test(label) || label.startsWith("-") || label.endsWith("-")) {
-            validationError("Enter a valid email address.");
+            validationError("Enter a valid email domain.");
         }
     }
 
-    const tld = labels.at(-1);
-    if (!/^[a-z]{2,24}$/i.test(tld)) validationError("Enter a valid email address.");
+    const tld = labels.at(-1).toLowerCase();
+    if (!/^[a-z]{2,24}$/i.test(tld)) validationError("Enter a valid email ending.");
 
-    const commonEndings = new Set(["com", "net", "org", "edu", "gov", "mil", "ph", "io", "co"]);
-    if (labels.length >= 3 && labels.at(-1).toLowerCase() === labels.at(-2).toLowerCase() && commonEndings.has(labels.at(-1).toLowerCase())) {
-        validationError("Check the email ending. Addresses such as johndoe@gmail.com.com are not accepted.");
+    const commonEndings = ["com", "net", "org", "edu", "gov", "mil", "ph", "io", "co"];
+    const repeatedEnding = labels.length >= 3 && labels.at(-1).toLowerCase() === labels.at(-2).toLowerCase() && commonEndings.includes(tld);
+    const concatenatedEnding = commonEndings.some(ending => tld === ending + ending);
+    if (repeatedEnding || concatenatedEnding) {
+        validationError("Check the email ending. Addresses such as me.test@gmail.comcom or me.test@gmail.com.com are not accepted.");
     }
 
     return email;
 }
 
 function validatePhone(value) {
-    const phone = String(value || "").trim();
-    if (!phone) return "";
-
-    if (phone.length > 25 || !/^[+0-9() .-]+$/.test(phone)) {
-        validationError("Phone number may only contain digits, spaces, +, -, parentheses, or periods.");
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (!/^[+0-9() .-]+$/.test(raw)) {
+        validationError("Enter a Philippine mobile number using digits and normal phone separators only.");
     }
 
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 7 || digits.length > 15 || /^(\d)\1+$/.test(digits)) {
-        validationError("Enter a valid phone number with 7 to 15 digits.");
+    const compact = raw.replace(/[() .-]/g, "");
+    let normalized = "";
+    if (/^09\d{9}$/.test(compact)) normalized = `+63${compact.slice(1)}`;
+    else if (/^\+639\d{9}$/.test(compact)) normalized = compact;
+    else validationError("Enter a valid Philippine mobile number such as 09171234567 or +639171234567.");
+
+    const subscriber = normalized.replace(/\D/g, "").slice(3);
+    if (/^(\d)\1{8}$/.test(subscriber) || ["123456789", "987654321", "000000000"].includes(subscriber)) {
+        validationError("Enter a real Philippine mobile number instead of an obvious placeholder number.");
     }
 
-    return phone;
+    return normalized;
 }
 
 function validateText(value, label, maxLength, required = false) {
@@ -1105,7 +1112,7 @@ $("cancelTotpEnroll").addEventListener("click", async () => {
     setMessage("loginMessage", "Authenticator setup was cancelled.");
 });
 
-// Creates a customer account and sends an email-verification message
+// Creates a pending customer account and requires the emailed 6-digit code to finish registration
 $("registerForm").addEventListener("submit", async event => {
     event.preventDefault();
     setMessage("registerMessage", "");
@@ -1122,23 +1129,28 @@ $("registerForm").addEventListener("submit", async event => {
             validationError("Passwords do not match.");
         }
 
-        await busy(event.submitter, async () => {
-            await api("/api/auth/register-customer", {
-                method: "POST",
-                body: JSON.stringify({ name, email, phone, company, address, password })
-            });
+        const result = await busy(event.submitter, () => api("/api/auth/register-customer", {
+            method: "POST",
+            body: JSON.stringify({ name, email, phone, company, address, password })
+        }), "Creating Account…");
 
-            const credential = await firebaseAuthApi.signInWithEmailAndPassword(firebaseAuthInstance, email, password);
-            if (!credential.user.emailVerified) await firebaseAuthApi.sendEmailVerification(credential.user);
-            await firebaseAuthApi.signOut(firebaseAuthInstance);
-        }, "Creating Account…");
+        pendingEmailOtpEmail = email;
+        pendingEmailOtpMaskedEmail = result.maskedEmail || email;
+        emailOtpResendAvailableAt = Date.now() + (Number(result.resendAfterSeconds || 60) * 1000);
+        emailOtpExpiresAt = Date.now() + (Number(result.expiresInSeconds || 600) * 1000);
+        saveEmailOtpSession();
 
         authFlowInProgress = false;
-        showAuthMode("login");
-        setSignInMethod("password-totp");
-        $("loginEmail").value = email;
+        showAuthMode("login", { preserveOtpSession: true });
+        setSignInMethod("email-otp", { preserveOtpSession: true });
         $("emailOtpEmail").value = email;
-        setMessage("loginMessage", "Account created. A verification email was sent. Verify your email for Authenticator setup, or choose Email OTP to sign in with a 6-digit code.", "success");
+        $("loginForm").classList.add("hidden");
+        $("registerForm").classList.add("hidden");
+        $("emailOtpForm").classList.remove("hidden");
+        $("emailOtpDestination").textContent = `Registration code sent to ${pendingEmailOtpMaskedEmail}.`;
+        setMessage("emailOtpMessage", "Enter the 6-digit code to verify your email and finish creating your XTECH account.", "success");
+        startEmailOtpCountdown();
+        $("emailOtpCode").focus();
     } catch (error) {
         authFlowInProgress = false;
         setMessage("registerMessage", error.message);
@@ -1510,7 +1522,7 @@ window.editCustomer = id => {
     $("modalBody").innerHTML = `<h2>Edit Customer</h2><form id="editCustomerForm" class="form-grid">
       <label>Customer Name<input id="editCustomerName" value="${esc(customer.name)}" maxlength="80" required></label>
       <label>Email Address<input id="editCustomerEmail" type="email" value="${esc(customer.email)}" maxlength="254" required></label>
-      <label>Phone Number<input id="editCustomerPhone" type="tel" value="${esc(customer.phone || "")}" maxlength="25" inputmode="tel"></label>
+      <label>Phone Number<input id="editCustomerPhone" type="tel" value="${esc(customer.phone || "")}" maxlength="18" inputmode="tel" placeholder="09171234567 or +639171234567"></label>
       <label>Company / Organization<input id="editCustomerCompany" value="${esc(customer.company || "")}" maxlength="120"></label>
       <label class="wide">Address<input id="editCustomerAddress" value="${esc(customer.address || "")}" maxlength="250"></label>
       <button class="primary wide">Save Customer Changes</button>

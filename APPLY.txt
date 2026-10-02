@@ -1,0 +1,41 @@
+XTECH AUTOMATION V20 PATCH
+
+V20 changes
+-----------
+- Strengthens email syntax validation.
+- Rejects examples such as me.test@@gmail.com, repeated-dot addresses,
+  duplicated endings such as .com.com, and common mistakes such as .comcom.
+- Checks email domains on the backend before saving new account/customer addresses.
+- Customer self-registration remains pending until the emailed 6-digit OTP is verified.
+- Successful registration verification marks the Firebase email verified and activates
+  both the XTECH user account and linked customer profile.
+- Philippine mobile numbers are accepted as 09XXXXXXXXX or +639XXXXXXXXX.
+- Accepted mobile numbers are normalized to +63 format.
+- Rejects obvious repeated-digit and simple sequential placeholder mobile numbers.
+- Keeps V19 forgot-password and live OTP resend countdown behavior.
+- Updates the AI manual, README, SETUP, CHANGELOG, validation, and package version.
+
+How to apply
+------------
+1. Stop XTECH with Ctrl + C.
+2. Copy the patch files into the matching paths in your GitHub working folder.
+3. Keep your existing .env and backend/serviceAccountKey.json.
+4. Run:
+   npm.cmd install
+   npm.cmd test
+   npm.cmd start
+5. Hard-refresh the browser with Ctrl + F5.
+
+GitHub update
+-------------
+git add .
+git commit -m "Release XTECH Automation V20"
+git push
+
+Important
+---------
+Do not commit:
+- .env
+- backend/serviceAccountKey.json
+- node_modules/
+- .vs/

@@ -63,7 +63,7 @@
 
                 <div id="emailOtpFields" class="auth-method-panel hidden">
                     <label>Email<input id="emailOtpEmail" type="email" autocomplete="email" maxlength="254"></label>
-                    <p class="helper-text auth-method-note">XTECH will send a short-lived 6-digit code to the registered email address. You must already have an active XTECH account.</p>
+                    <p class="helper-text auth-method-note">XTECH will send a short-lived 6-digit code to the registered email address. Pending customer registrations can also use this step to finish email verification.</p>
                 </div>
 
                 <button id="loginSubmit" class="primary full" type="submit">Continue with Password + Authenticator</button>
@@ -126,7 +126,7 @@
                 <div class="form-grid compact-grid">
                     <label class="wide">Full Name<input id="registerName" maxlength="80" autocomplete="name" required></label>
                     <label>Email<input id="registerEmail" type="email" autocomplete="email" maxlength="254" required></label>
-                    <label>Phone Number<input id="registerPhone" type="tel" maxlength="25" inputmode="tel" autocomplete="tel"></label>
+                    <label>Phone Number<input id="registerPhone" type="tel" maxlength="18" inputmode="tel" autocomplete="tel" placeholder="09171234567 or +639171234567"><small>Philippine mobile number only. It will be saved in +63 format.</small></label>
                     <label>Company / Organization<input id="registerCompany" maxlength="120" autocomplete="organization"></label>
                     <label>Address<input id="registerAddress" maxlength="250" autocomplete="street-address"></label>
                     <label>
@@ -303,7 +303,7 @@
                         <form id="customerForm" class="form-grid">
                             <label>Customer Name<input id="customerName" maxlength="80" required></label>
                             <label>Email Address<input id="customerEmail" type="email" maxlength="254" required></label>
-                            <label>Phone Number<input id="customerPhone" type="tel" maxlength="25" inputmode="tel"></label>
+                            <label>Phone Number<input id="customerPhone" type="tel" maxlength="18" inputmode="tel" placeholder="09171234567 or +639171234567"><small>Philippine mobile number only.</small></label>
                             <label>Company / Organization<input id="customerCompany" maxlength="120"></label>
                             <label class="wide">Address<input id="customerAddress" maxlength="250"></label>
                             <button class="primary wide">Register Customer</button>
@@ -477,7 +477,7 @@
                         <form id="profileForm" class="form-grid">
                             <label>Full Name<input id="profileName" maxlength="80" required></label>
                             <label>Email Address<input id="profileEmail" type="email" readonly></label>
-                            <label>Phone Number<input id="profilePhone" type="tel" maxlength="25" inputmode="tel"></label>
+                            <label>Phone Number<input id="profilePhone" type="tel" maxlength="18" inputmode="tel" placeholder="09171234567 or +639171234567"><small>Philippine mobile number only.</small></label>
                             <label>Company / Organization<input id="profileCompany" maxlength="120"></label>
                             <label class="wide">Address<input id="profileAddress" maxlength="250"></label>
                             <button class="primary wide">Save Profile Changes</button>

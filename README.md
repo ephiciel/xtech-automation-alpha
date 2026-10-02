@@ -1,4 +1,14 @@
-# XTECH Automation V19
+# XTECH Automation V20
+
+## V20 verified contact validation
+
+- Rejects malformed emails such as `me.test@@gmail.com`, repeated-dot addresses, duplicated endings such as `.com.com`, and common concatenated mistakes such as `.comcom`.
+- The backend checks whether new account/customer email domains can resolve for mail delivery.
+- Customer self-registration now requires the emailed 6-digit OTP before the account is activated.
+- Philippine mobile numbers are accepted as `09XXXXXXXXX` or `+639XXXXXXXXX` and stored in normalized `+63` format.
+- Obvious placeholder/repeated/sequential mobile numbers are rejected.
+- Validation is enforced in both the browser and backend.
+
 
 ## V19 login recovery and Email OTP countdown update
 

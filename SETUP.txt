@@ -198,3 +198,11 @@ feature branches = individual work
 Pull Requests = review before merge
 
 Do not commit secrets.
+
+
+V20 contact validation notes:
+- Customer registration requires successful Email OTP verification before the account becomes active.
+- Email domains are checked by the backend, so the computer/server must have working DNS access.
+- Philippine mobile numbers should be entered as 09XXXXXXXXX or +639XXXXXXXXX.
+- Accepted mobile numbers are stored in +63 format.
+- Do not disable backend validation even if browser validation is present.

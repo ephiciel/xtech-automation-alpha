@@ -69,6 +69,16 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
   fail("V19 login recovery or persistent OTP countdown is missing");
 }
 
+const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+if (/emailDomainCanReceiveMail/.test(serverJs) && /normalizePhilippineMobile/.test(serverJs) && /registrationPending/.test(serverJs) && /gmail\.comcom/.test(appJs)) {
+  pass("V20 verified email and Philippine mobile validation are present");
+} else {
+  fail("V20 contact validation or registration verification is missing");
+}
+if (packageJson.version === "20.0.0") pass("package version is 20.0.0");
+else fail(`package version should be 20.0.0, found ${packageJson.version}`);
+
 const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
 if (/serviceAccountKey\.json/.test(gitignore) && /^\.env$/m.test(gitignore)) pass("secret files are ignored by Git");
 else fail(".gitignore must include .env and backend/serviceAccountKey.json");
