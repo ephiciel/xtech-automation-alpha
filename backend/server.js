@@ -1730,7 +1730,9 @@ Rules:
 Answer style:
 - Start with the direct answer. Avoid unnecessary introductions.
 - Prefer 2 to 7 short numbered steps for procedures.
+- For non-procedure lists, use standard Markdown bullets beginning with "- ".
 - Use the exact XTECH labels in **bold** when useful.
+- Use Markdown headings only when they improve readability.
 - For troubleshooting, state the likely documented reason and the next thing to check.
 - Keep answers concise unless the user asks for more detail.
 - Do not use Markdown horizontal-rule separators such as ---.

@@ -2334,7 +2334,7 @@ async function copyAiAnswer(text, button) {
     }
 }
 
-// Converts a small set of Markdown into safe HTML for AI answers
+// Converts common Markdown into safe HTML for AI answers
 function renderAssistantMarkdown(value) {
     const escapeHtml = text => String(text ?? "").replace(/[&<>"']/g, char => ({
         "&": "&amp;",
@@ -2346,10 +2346,14 @@ function renderAssistantMarkdown(value) {
 
     const formatInline = value => {
         let text = escapeHtml(value);
+
+        // Formats the Markdown styles used in XTECH AI responses.
         text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
         text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
         text = text.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+        text = text.replace(/~~([^~]+)~~/g, "<del>$1</del>");
         text = text.replace(/(^|\s)\*([^*\n]+)\*(?=\s|$|[.,!?;:])/g, "$1<em>$2</em>");
+        text = text.replace(/(^|\s)_([^_\n]+)_(?=\s|$|[.,!?;:])/g, "$1<em>$2</em>");
         return text;
     };
 
@@ -2371,21 +2375,23 @@ function renderAssistantMarkdown(value) {
             continue;
         }
 
-        // Converts Markdown separators like --- into a clean divider
+        // Converts Markdown separators into a subtle divider.
         if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(line)) {
             closeList();
             output.push('<hr class="ai-divider">');
             continue;
         }
 
-        const heading = line.match(/^(#{1,4})\s+(.+)$/);
+        // Supports normal Markdown headings without showing the # characters.
+        const heading = line.match(/^(#{1,6})\s+(.+)$/);
         if (heading) {
             closeList();
-            const level = Math.min(4, heading[1].length + 1);
+            const level = Math.min(5, heading[1].length + 1);
             output.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
             continue;
         }
 
+        // Supports numbered Markdown lists such as "1. Item" and "1) Item".
         const ordered = line.match(/^\d+[.)]\s+(.+)$/);
         if (ordered) {
             if (listType !== "ol") {
@@ -2397,7 +2403,8 @@ function renderAssistantMarkdown(value) {
             continue;
         }
 
-        const unordered = line.match(/^[-•]\s+(.+)$/);
+        // Supports *, -, +, and • as Markdown bullet markers.
+        const unordered = line.match(/^(?:[-+*•])\s+(.+)$/);
         if (unordered) {
             if (listType !== "ul") {
                 closeList();
@@ -2410,7 +2417,8 @@ function renderAssistantMarkdown(value) {
 
         closeList();
 
-        const noteText = line.replace(/^\*/, "").replace(/\*$/, "");
+        // Turns short Note/Tip/Warning lines into a highlighted callout.
+        const noteText = line.replace(/^\*(?!\s)/, "").replace(/\*$/, "");
         if (/^(note|important|tip|warning):/i.test(noteText)) {
             output.push(`<div class="ai-note">${formatInline(noteText)}</div>`);
             continue;

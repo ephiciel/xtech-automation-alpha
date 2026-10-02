@@ -1485,8 +1485,8 @@ tbody tr:last-child td {
 .chat-message {
   display: flex;
   align-items: flex-end;
-  gap: 9px;
-  margin: 0 0 16px;
+  gap: 10px;
+  margin: 0 0 18px;
 }
 
 .chat-message.assistant {
@@ -1536,15 +1536,15 @@ tbody tr:last-child td {
 }
 
 .chat-bubble {
-  padding: 13px 15px;
+  padding: 15px 16px;
   overflow-wrap: anywhere;
   background: var(--panel);
   color: var(--text-soft);
   border: 1px solid var(--border);
-  border-radius: 6px 16px 16px 16px;
+  border-radius: 8px 16px 16px 16px;
   box-shadow: var(--shadow-xs);
   font-size: 13px;
-  line-height: 1.62;
+  line-height: 1.65;
 }
 
 .chat-message.user .chat-bubble {
@@ -1599,15 +1599,33 @@ body.dark .chat-message.user .chat-bubble {
   color: var(--text-soft);
 }
 
+.chat-bubble del {
+  color: var(--muted);
+}
+
 .chat-bubble ol,
 .chat-bubble ul {
-  margin: 8px 0 11px;
-  padding-left: 22px;
+  margin: 10px 0 13px;
+  padding-left: 24px;
+}
+
+.chat-bubble ul {
+  list-style-type: disc;
+}
+
+.chat-bubble ol {
+  list-style-type: decimal;
 }
 
 .chat-bubble li {
-  margin: 0 0 6px;
-  padding-left: 2px;
+  margin: 0 0 7px;
+  padding-left: 3px;
+  line-height: 1.55;
+}
+
+.chat-bubble li::marker {
+  color: var(--primary);
+  font-weight: 800;
 }
 
 .chat-bubble li:last-child {
