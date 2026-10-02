@@ -1,40 +1,36 @@
-XTECH AUTOMATION V21 DEPLOYMENT PATCH
+XTECH AUTOMATION V22 PATCH
 
-What V21 changes
-----------------
-- Makes the Node/Express server compatible with Render by binding to 0.0.0.0.
-- Uses Render's PORT environment variable.
-- Supports Firebase Admin credentials from /etc/secrets/serviceAccountKey.json.
-- Keeps backend/serviceAccountKey.json working locally.
-- Updates .env.example for Resend SMTP and no-reply@xtech-automation.com.
-- Adds NODE_ENV and APP_URL production settings.
-- Updates README, SETUP, CHANGELOG, AI manual, package version, and validation.
+Purpose
+-------
+V22 changes Email OTP delivery from SMTP to the Resend HTTPS API so it works on Render Free.
 
-How to apply
-------------
+Apply
+-----
 1. Stop XTECH with Ctrl + C.
-2. Copy these patch files into your xtech-automation-alpha Git folder.
+2. Copy the patch files into your xtech-automation-alpha Git working folder.
 3. Keep your existing .env and backend/serviceAccountKey.json.
-4. Run:
-   npm.cmd install
+4. Update your local .env:
+   RESEND_API_KEY=YOUR_RESEND_API_KEY
+   MAIL_FROM="XTECH Automation <no-reply@xtech-automation.com>"
+   EMAIL_OTP_EXPIRY_MINUTES=10
+   EMAIL_OTP_RESEND_SECONDS=60
+   Remove the old SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS settings if you want.
+5. Run:
    npm.cmd test
    npm.cmd start
-5. Confirm localhost still works.
-
-Then push:
+6. Test one Email OTP locally.
+7. Push:
    git add .
-   git commit -m "Release XTECH Automation V21"
+   git commit -m "Release XTECH Automation V22"
    git push
 
-Render settings
----------------
-Runtime: Node
-Build Command: npm ci
-Start Command: npm start
-Health Check Path: /api/status
+Render environment
+------------------
+NODE_ENV=production
+APP_URL=https://xtech-automation.com
+RESEND_API_KEY=YOUR_RESEND_API_KEY
+MAIL_FROM="XTECH Automation <no-reply@xtech-automation.com>"
+EMAIL_OTP_EXPIRY_MINUTES=10
+EMAIL_OTP_RESEND_SECONDS=60
 
-Do not commit:
-- .env
-- backend/serviceAccountKey.json
-- node_modules/
-- .vs/
+Also add the Firebase web config, Gemini key, and Firebase serviceAccountKey.json secret file.

@@ -579,7 +579,7 @@ What if I forgot my password?
 From the login page, choose Password + Authenticator, enter the registered email address, and select Forgot password?. Signed-in users can also use Send Reset Email in Account & Security.
 
 Why did XTECH fail to send an Email OTP?
-The server email settings may be incomplete or incorrect. Check SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, and MAIL_FROM in the server .env file. If Gmail is used, use an App Password instead of the normal Gmail password.
+The server email settings may be incomplete or incorrect. XTECH uses the Resend HTTPS API for Email OTP delivery. Check RESEND_API_KEY and MAIL_FROM in the server environment. The sending domain must also be verified in Resend.
 
 What can I do on this page?
 The Help Assistant can use the current visible XTECH page as context. It should explain the documented actions available on that page for the signed-in role.

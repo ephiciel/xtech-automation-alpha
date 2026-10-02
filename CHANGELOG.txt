@@ -1,5 +1,14 @@
 XTECH AUTOMATION CHANGELOG
 
+Version 22
+----------
+Render Free / Resend API Deployment
+- Replaced SMTP-based OTP delivery with the Resend HTTPS Email API.
+- Uses RESEND_API_KEY instead of SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS.
+- Keeps MAIL_FROM as XTECH Automation <no-reply@xtech-automation.com>.
+- This avoids SMTP-port restrictions on free hosting platforms such as Render Free.
+- Local development and Render deployment use the same Resend HTTPS API configuration.
+
 Version 21
 ----------
 Deployment Readiness

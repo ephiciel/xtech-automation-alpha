@@ -1,3 +1,22 @@
+# XTECH Automation V22
+
+## Render Free email delivery
+
+V22 sends Email OTP messages through the **Resend HTTPS API** instead of SMTP. This is the recommended configuration for Render Free.
+
+Set these server environment variables:
+
+```env
+RESEND_API_KEY=YOUR_RESEND_API_KEY
+MAIL_FROM="XTECH Automation <no-reply@xtech-automation.com>"
+EMAIL_OTP_EXPIRY_MINUTES=10
+EMAIL_OTP_RESEND_SECONDS=60
+```
+
+Do not commit the real `RESEND_API_KEY` to GitHub.
+
+---
+
 # XTECH Automation V21
 
 ## V20 verified contact validation
@@ -327,7 +346,7 @@ Production changes:
 
 - Express listens on Render's `PORT` using host `0.0.0.0`.
 - Firebase Admin can load `serviceAccountKey.json` from Render Secret Files at `/etc/secrets/serviceAccountKey.json` while still using `backend/serviceAccountKey.json` locally.
-- `.env.example` now uses Resend SMTP defaults for `no-reply@xtech-automation.com`.
+- `.env.example` now uses the Resend HTTPS API for `no-reply@xtech-automation.com`.
 - `APP_URL` and `NODE_ENV` are documented for production.
 
 ### Render settings
@@ -354,11 +373,8 @@ FIREBASE_STORAGE_BUCKET=xtech-automation.firebasestorage.app
 FIREBASE_MESSAGING_SENDER_ID=...
 FIREBASE_APP_ID=...
 GEMINI_API_KEY=...
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=resend
-SMTP_PASS=<Resend API key>
+RESEND_API_KEY=<Resend API key>
+MAIL_FROM="XTECH Automation <no-reply@xtech-automation.com>"
 MAIL_FROM=XTECH Automation <no-reply@xtech-automation.com>
 EMAIL_OTP_EXPIRY_MINUTES=10
 EMAIL_OTP_RESEND_SECONDS=60

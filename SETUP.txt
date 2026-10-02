@@ -1,3 +1,16 @@
+XTECH AUTOMATION V22 - CURRENT EMAIL SETUP
+=========================================
+
+V22 uses the Resend HTTPS API for Email OTP delivery.
+Use these variables in .env locally and in Render Environment Variables:
+
+RESEND_API_KEY=YOUR_RESEND_API_KEY
+MAIL_FROM="XTECH Automation <no-reply@xtech-automation.com>"
+EMAIL_OTP_EXPIRY_MINUTES=10
+EMAIL_OTP_RESEND_SECONDS=60
+
+The older SMTP/Gmail notes below are historical and are not required for V22.
+
 XTECH AUTOMATION - CLASSMATE SETUP GUIDE
 ========================================
 

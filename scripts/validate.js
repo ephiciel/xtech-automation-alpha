@@ -76,8 +76,8 @@ if (/emailDomainCanReceiveMail/.test(serverJs) && /normalizePhilippineMobile/.te
 } else {
   fail("V20 contact validation or registration verification is missing");
 }
-if (packageJson.version === "21.0.0") pass("package version is 21.0.0");
-else fail(`package version should be 21.0.0, found ${packageJson.version}`);
+if (packageJson.version === "22.0.0") pass("package version is 22.0.0");
+else fail(`package version should be 22.0.0, found ${packageJson.version}`);
 
 const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
 if (/serviceAccountKey\.json/.test(gitignore) && /^\.env$/m.test(gitignore)) pass("secret files are ignored by Git");
@@ -90,6 +90,20 @@ else fail("backend/firebase.js must support /etc/secrets/serviceAccountKey.json"
 
 if (/app\.listen\(PORT,\s*["']0\.0\.0\.0["']/.test(serverJs)) pass("server binds to 0.0.0.0 for Render");
 else fail("backend/server.js must bind to 0.0.0.0");
+
+// V22 Render Free-compatible Email OTP checks
+const mailerJs = fs.readFileSync(path.join(root, "backend/mailer.js"), "utf8");
+const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf8");
+if (/api\.resend\.com\/emails/.test(mailerJs) && /RESEND_API_KEY/.test(mailerJs)) {
+  pass("Resend HTTPS API email delivery is present");
+} else {
+  fail("backend/mailer.js must use the Resend HTTPS API for Email OTP delivery");
+}
+if (/RESEND_API_KEY=/.test(envExample) && !/SMTP_HOST=/.test(envExample)) {
+  pass(".env.example uses Resend API configuration");
+} else {
+  fail(".env.example must use RESEND_API_KEY and not require SMTP settings");
+}
 
 if (failures) {
   console.error(`\n${failures} validation check(s) failed.`);
