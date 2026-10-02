@@ -1899,6 +1899,9 @@ app.get("/{*splat}", (req, res) => {
     res.sendFile(path.join(__dirname, "../frontend/index.html"));
 });
 
-app.listen(PORT, () => {
-    console.log(`XTECH Automation running at http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+    const publicUrl = String(process.env.APP_URL || "").trim();
+    console.log(`XTECH Automation listening on 0.0.0.0:${PORT}`);
+    if (publicUrl) console.log(`Public URL: ${publicUrl}`);
+    else console.log(`Local URL: http://localhost:${PORT}`);
 });

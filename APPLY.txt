@@ -1,39 +1,38 @@
-XTECH AUTOMATION V20 PATCH
+XTECH AUTOMATION V21 DEPLOYMENT PATCH
 
-V20 changes
------------
-- Strengthens email syntax validation.
-- Rejects examples such as me.test@@gmail.com, repeated-dot addresses,
-  duplicated endings such as .com.com, and common mistakes such as .comcom.
-- Checks email domains on the backend before saving new account/customer addresses.
-- Customer self-registration remains pending until the emailed 6-digit OTP is verified.
-- Successful registration verification marks the Firebase email verified and activates
-  both the XTECH user account and linked customer profile.
-- Philippine mobile numbers are accepted as 09XXXXXXXXX or +639XXXXXXXXX.
-- Accepted mobile numbers are normalized to +63 format.
-- Rejects obvious repeated-digit and simple sequential placeholder mobile numbers.
-- Keeps V19 forgot-password and live OTP resend countdown behavior.
-- Updates the AI manual, README, SETUP, CHANGELOG, validation, and package version.
+What V21 changes
+----------------
+- Makes the Node/Express server compatible with Render by binding to 0.0.0.0.
+- Uses Render's PORT environment variable.
+- Supports Firebase Admin credentials from /etc/secrets/serviceAccountKey.json.
+- Keeps backend/serviceAccountKey.json working locally.
+- Updates .env.example for Resend SMTP and no-reply@xtech-automation.com.
+- Adds NODE_ENV and APP_URL production settings.
+- Updates README, SETUP, CHANGELOG, AI manual, package version, and validation.
 
 How to apply
 ------------
 1. Stop XTECH with Ctrl + C.
-2. Copy the patch files into the matching paths in your GitHub working folder.
+2. Copy these patch files into your xtech-automation-alpha Git folder.
 3. Keep your existing .env and backend/serviceAccountKey.json.
 4. Run:
    npm.cmd install
    npm.cmd test
    npm.cmd start
-5. Hard-refresh the browser with Ctrl + F5.
+5. Confirm localhost still works.
 
-GitHub update
--------------
-git add .
-git commit -m "Release XTECH Automation V20"
-git push
+Then push:
+   git add .
+   git commit -m "Release XTECH Automation V21"
+   git push
 
-Important
----------
+Render settings
+---------------
+Runtime: Node
+Build Command: npm ci
+Start Command: npm start
+Health Check Path: /api/status
+
 Do not commit:
 - .env
 - backend/serviceAccountKey.json

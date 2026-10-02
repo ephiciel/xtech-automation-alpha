@@ -76,12 +76,20 @@ if (/emailDomainCanReceiveMail/.test(serverJs) && /normalizePhilippineMobile/.te
 } else {
   fail("V20 contact validation or registration verification is missing");
 }
-if (packageJson.version === "20.0.0") pass("package version is 20.0.0");
-else fail(`package version should be 20.0.0, found ${packageJson.version}`);
+if (packageJson.version === "21.0.0") pass("package version is 21.0.0");
+else fail(`package version should be 21.0.0, found ${packageJson.version}`);
 
 const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
 if (/serviceAccountKey\.json/.test(gitignore) && /^\.env$/m.test(gitignore)) pass("secret files are ignored by Git");
 else fail(".gitignore must include .env and backend/serviceAccountKey.json");
+
+// V21 deployment checks
+const firebaseJs = fs.readFileSync(path.join(root, "backend/firebase.js"), "utf8");
+if (/\/etc\/secrets\/serviceAccountKey\.json/.test(firebaseJs)) pass("Render Firebase secret-file support is present");
+else fail("backend/firebase.js must support /etc/secrets/serviceAccountKey.json");
+
+if (/app\.listen\(PORT,\s*["']0\.0\.0\.0["']/.test(serverJs)) pass("server binds to 0.0.0.0 for Render");
+else fail("backend/server.js must bind to 0.0.0.0");
 
 if (failures) {
   console.error(`\n${failures} validation check(s) failed.`);

@@ -1,5 +1,16 @@
 XTECH AUTOMATION CHANGELOG
 
+Version 21
+----------
+Deployment Readiness
+- Added production support for Render Web Services.
+- Express now binds to 0.0.0.0 and uses the Render-provided PORT value.
+- Firebase Admin now supports Render Secret Files at /etc/secrets/serviceAccountKey.json.
+- Local development continues to use backend/serviceAccountKey.json.
+- Updated .env.example for Resend SMTP and no-reply@xtech-automation.com.
+- Added NODE_ENV and APP_URL production configuration.
+- Added Render deployment instructions to README.md and SETUP.txt.
+
 Version 20
 ----------
 Verified Contact Validation

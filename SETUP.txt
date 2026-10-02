@@ -206,3 +206,24 @@ V20 contact validation notes:
 - Philippine mobile numbers should be entered as 09XXXXXXXXX or +639XXXXXXXXX.
 - Accepted mobile numbers are stored in +63 format.
 - Do not disable backend validation even if browser validation is present.
+
+
+XTECH AUTOMATION V21 - RENDER DEPLOYMENT
+--------------------------------------
+V21 supports Render production hosting.
+
+Render Web Service:
+- Runtime: Node
+- Build Command: npm ci
+- Start Command: npm start
+- Health Check: /api/status
+
+Production environment:
+- NODE_ENV=production
+- APP_URL=https://xtech-automation.com
+- SMTP uses smtp.resend.com with SMTP_USER=resend and SMTP_PASS set to the Resend API key.
+- MAIL_FROM=XTECH Automation <no-reply@xtech-automation.com>
+
+Firebase Admin:
+Upload the existing service-account JSON as a Render Secret File named serviceAccountKey.json.
+V21 automatically checks /etc/secrets/serviceAccountKey.json in production and backend/serviceAccountKey.json locally.

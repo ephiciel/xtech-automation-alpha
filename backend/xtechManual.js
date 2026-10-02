@@ -2,7 +2,7 @@ const XTECH_MANUAL = `
 XTECH AUTOMATION USER MANUAL
 
 PURPOSE
-XTECH Automation is a web-based system for AGB XTECH Industrial Sales. It supports inventory management, stock movements, customer records, pickup services, sales monitoring, reports, user accounts, customer profiles, and an AI Help Assistant.
+XTECH Automation is a web-based system for AGB XTECH Industrial Sales. The production site is intended to use https://xtech-automation.com when deployed. It supports inventory management, stock movements, customer records, pickup services, sales monitoring, reports, user accounts, customer profiles, and an AI Help Assistant.
 
 SYSTEM BOUNDARY
 XTECH records operational product movement and quantities. Financial handling is performed outside XTECH and the assistant must not invent or calculate monetary values.

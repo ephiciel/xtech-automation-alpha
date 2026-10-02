@@ -1,4 +1,4 @@
-# XTECH Automation V20
+# XTECH Automation V21
 
 ## V20 verified contact validation
 
@@ -317,3 +317,57 @@ V14 strengthens Ordering / Pickup Schedule stock validation.
 - If stock has changed and is no longer sufficient, approval/completion is blocked with the current available quantity.
 
 Pending pickup requests do not deduct inventory until the pickup is completed. This keeps the existing XTECH inventory workflow intact while preventing a single pickup request from exceeding current stock.
+
+
+## V21 deployment readiness
+
+V21 prepares XTECH Automation for hosting on Render and the custom domain `https://xtech-automation.com`.
+
+Production changes:
+
+- Express listens on Render's `PORT` using host `0.0.0.0`.
+- Firebase Admin can load `serviceAccountKey.json` from Render Secret Files at `/etc/secrets/serviceAccountKey.json` while still using `backend/serviceAccountKey.json` locally.
+- `.env.example` now uses Resend SMTP defaults for `no-reply@xtech-automation.com`.
+- `APP_URL` and `NODE_ENV` are documented for production.
+
+### Render settings
+
+Use these service settings:
+
+```text
+Runtime: Node
+Build Command: npm ci
+Start Command: npm start
+Health Check Path: /api/status
+```
+
+Set these environment variables in Render instead of committing `.env`:
+
+```text
+NODE_ENV=production
+APP_URL=https://xtech-automation.com
+PORT=<leave Render-managed unless you have a reason to override it>
+FIREBASE_API_KEY=...
+FIREBASE_AUTH_DOMAIN=xtech-automation.firebaseapp.com
+FIREBASE_PROJECT_ID=xtech-automation
+FIREBASE_STORAGE_BUCKET=xtech-automation.firebasestorage.app
+FIREBASE_MESSAGING_SENDER_ID=...
+FIREBASE_APP_ID=...
+GEMINI_API_KEY=...
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=resend
+SMTP_PASS=<Resend API key>
+MAIL_FROM=XTECH Automation <no-reply@xtech-automation.com>
+EMAIL_OTP_EXPIRY_MINUTES=10
+EMAIL_OTP_RESEND_SECONDS=60
+```
+
+Add the Firebase Admin JSON to Render as a Secret File named exactly:
+
+```text
+serviceAccountKey.json
+```
+
+Do not commit `.env`, the Resend API key, Gemini API key, or Firebase Admin service-account JSON.
