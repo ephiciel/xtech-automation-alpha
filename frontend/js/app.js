@@ -26,7 +26,11 @@ let pendingMfaResolver = null;
 let pendingMfaHint = null;
 let pendingTotpSecret = null;
 let pendingEmailOtpEmail = "";
+let pendingEmailOtpMaskedEmail = "";
 let emailOtpResendAvailableAt = 0;
+let emailOtpExpiresAt = 0;
+let emailOtpCountdownTimer = null;
+const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
 let pendingPasswordChangeMfaResolver = null;
 let pendingPasswordChangeMfaHint = null;
 
@@ -538,13 +542,117 @@ async function initFirebase() {
     return firebaseAuthInstance;
 }
 
+// Stores the email OTP screen state so a page refresh does not reset the resend countdown
+function saveEmailOtpSession() {
+    if (!pendingEmailOtpEmail || !emailOtpExpiresAt) return;
+    try {
+        sessionStorage.setItem(EMAIL_OTP_SESSION_KEY, JSON.stringify({
+            email: pendingEmailOtpEmail,
+            maskedEmail: pendingEmailOtpMaskedEmail,
+            resendAvailableAt: emailOtpResendAvailableAt,
+            expiresAt: emailOtpExpiresAt
+        }));
+    } catch (error) {
+        // The backend still enforces the cooldown if browser storage is unavailable.
+    }
+}
+
+// Stops the live resend timer
+function stopEmailOtpCountdown() {
+    if (emailOtpCountdownTimer) {
+        clearInterval(emailOtpCountdownTimer);
+        emailOtpCountdownTimer = null;
+    }
+}
+
+// Removes the locally saved email OTP sign-in state
+function clearEmailOtpSession() {
+    stopEmailOtpCountdown();
+    pendingEmailOtpEmail = "";
+    pendingEmailOtpMaskedEmail = "";
+    emailOtpResendAvailableAt = 0;
+    emailOtpExpiresAt = 0;
+    try {
+        sessionStorage.removeItem(EMAIL_OTP_SESSION_KEY);
+    } catch (error) {
+        // Ignores storage errors when session storage is unavailable.
+    }
+
+    if ($("resendEmailOtp")) {
+        $("resendEmailOtp").disabled = false;
+        $("resendEmailOtp").textContent = "Resend Code";
+    }
+    if ($("emailOtpCooldown")) $("emailOtpCooldown").textContent = "";
+}
+
+// Updates the resend button and countdown once per second
+function updateEmailOtpCountdown() {
+    const button = $("resendEmailOtp");
+    const countdown = $("emailOtpCooldown");
+    if (!button || !countdown) return;
+
+    const remainingSeconds = Math.max(0, Math.ceil((emailOtpResendAvailableAt - Date.now()) / 1000));
+    if (remainingSeconds > 0) {
+        button.disabled = true;
+        button.textContent = `Resend Code (${remainingSeconds}s)`;
+        countdown.textContent = `Please wait ${remainingSeconds} second${remainingSeconds === 1 ? "" : "s"} before requesting another code.`;
+        return;
+    }
+
+    button.disabled = false;
+    button.textContent = "Resend Code";
+    countdown.textContent = "You can request another code now.";
+    stopEmailOtpCountdown();
+}
+
+// Starts a live resend countdown using an absolute timestamp
+function startEmailOtpCountdown() {
+    stopEmailOtpCountdown();
+    updateEmailOtpCountdown();
+    if (emailOtpResendAvailableAt > Date.now()) {
+        emailOtpCountdownTimer = setInterval(updateEmailOtpCountdown, 250);
+    }
+}
+
+// Restores an unfinished email OTP sign-in after the page is refreshed
+function restoreEmailOtpSession() {
+    let saved = null;
+    try {
+        saved = JSON.parse(sessionStorage.getItem(EMAIL_OTP_SESSION_KEY) || "null");
+    } catch (error) {
+        saved = null;
+    }
+
+    if (!saved?.email || !saved?.expiresAt || Number(saved.expiresAt) <= Date.now()) {
+        clearEmailOtpSession();
+        return false;
+    }
+
+    pendingEmailOtpEmail = String(saved.email);
+    pendingEmailOtpMaskedEmail = String(saved.maskedEmail || saved.email);
+    emailOtpResendAvailableAt = Number(saved.resendAvailableAt || 0);
+    emailOtpExpiresAt = Number(saved.expiresAt || 0);
+
+    setSignInMethod("email-otp", { preserveOtpSession: true });
+    $("emailOtpEmail").value = pendingEmailOtpEmail;
+    $("loginForm").classList.add("hidden");
+    $("registerForm").classList.add("hidden");
+    $("emailOtpForm").classList.remove("hidden");
+    $("emailOtpDestination").textContent = `Code sent to ${pendingEmailOtpMaskedEmail}.`;
+
+    const minutesRemaining = Math.max(1, Math.ceil((emailOtpExpiresAt - Date.now()) / 60000));
+    setMessage("emailOtpMessage", `Enter the 6-digit code. It expires in about ${minutesRemaining} minute${minutesRemaining === 1 ? "" : "s"}.`, "success");
+    startEmailOtpCountdown();
+    return true;
+}
+
 // Hides the extra security forms and returns to the selected sign-in method
-function resetSecurityForms() {
+function resetSecurityForms({ clearOtpSession = false } = {}) {
     pendingMfaResolver = null;
     pendingMfaHint = null;
     pendingTotpSecret = null;
-    pendingEmailOtpEmail = "";
-    emailOtpResendAvailableAt = 0;
+    if (clearOtpSession) clearEmailOtpSession();
+    else stopEmailOtpCountdown();
     $("totpChallengeForm").classList.add("hidden");
     $("totpEnrollForm").classList.add("hidden");
     $("emailOtpForm").classList.add("hidden");
@@ -561,9 +669,11 @@ function resetSecurityForms() {
 }
 
 // Switches between password plus authenticator and email-code sign in
-function setSignInMethod(method) {
+function setSignInMethod(method, { preserveOtpSession = false } = {}) {
     selectedSignInMethod = method === "email-otp" ? "email-otp" : "password-totp";
     const emailOtp = selectedSignInMethod === "email-otp";
+
+    if (!emailOtp && !preserveOtpSession) clearEmailOtpSession();
 
     $("passwordTotpFields").classList.toggle("hidden", emailOtp);
     $("emailOtpFields").classList.toggle("hidden", !emailOtp);
@@ -574,9 +684,9 @@ function setSignInMethod(method) {
 }
 
 // Switches between the login and registration forms
-function showAuthMode(mode) {
+function showAuthMode(mode, { preserveOtpSession = false } = {}) {
     const login = mode === "login";
-    resetSecurityForms();
+    resetSecurityForms({ clearOtpSession: !preserveOtpSession });
     $("loginForm").classList.toggle("hidden", !login);
     $("registerForm").classList.toggle("hidden", login);
     $("showLoginBtn").classList.toggle("active", login);
@@ -774,6 +884,23 @@ $("showRegisterBtn").addEventListener("click", () => showAuthMode("register"));
 $("passwordTotpMethod").addEventListener("click", () => setSignInMethod("password-totp"));
 $("emailOtpMethod").addEventListener("click", () => setSignInMethod("email-otp"));
 
+// Sends a Firebase password-reset email from the signed-out login screen
+$("forgotPasswordBtn").addEventListener("click", async event => {
+    setMessage("loginMessage", "");
+    try {
+        const email = validateEmail($("loginEmail").value);
+        const auth = await initFirebase();
+        await busy(event.currentTarget, () => firebaseAuthApi.sendPasswordResetEmail(auth, email), "Sending…");
+        setMessage("loginMessage", `If an XTECH account exists for ${email}, a password-reset email has been sent.`, "success");
+    } catch (error) {
+        if (error?.code === "auth/user-not-found") {
+            setMessage("loginMessage", "If an XTECH account exists for that email, a password-reset email has been sent.", "success");
+            return;
+        }
+        setMessage("loginMessage", error.message || "Could not send the password-reset email.");
+    }
+});
+
 // Signs in with password plus Authenticator or sends a one-time email code
 $("loginForm").addEventListener("submit", async event => {
     event.preventDefault();
@@ -789,12 +916,16 @@ $("loginForm").addEventListener("submit", async event => {
             }), "Sending Code…");
 
             pendingEmailOtpEmail = email;
+            pendingEmailOtpMaskedEmail = result.maskedEmail || email;
             emailOtpResendAvailableAt = Date.now() + (Number(result.resendAfterSeconds || 60) * 1000);
+            emailOtpExpiresAt = Date.now() + (Number(result.expiresInSeconds || 600) * 1000);
+            saveEmailOtpSession();
             $("loginForm").classList.add("hidden");
             $("registerForm").classList.add("hidden");
             $("emailOtpForm").classList.remove("hidden");
-            $("emailOtpDestination").textContent = `Code sent to ${result.maskedEmail || email}.`;
+            $("emailOtpDestination").textContent = `Code sent to ${pendingEmailOtpMaskedEmail}.`;
             setMessage("emailOtpMessage", `Enter the 6-digit code. It expires in ${Math.ceil(Number(result.expiresInSeconds || 600) / 60)} minutes.`, "success");
+            startEmailOtpCountdown();
             $("emailOtpCode").focus();
         } catch (error) {
             setMessage("loginMessage", error.message);
@@ -853,8 +984,7 @@ $("emailOtpForm").addEventListener("submit", async event => {
 
         const credential = await firebaseAuthApi.signInWithCustomToken(firebaseAuthInstance, result.customToken);
         const user = credential.user;
-        pendingEmailOtpEmail = "";
-        emailOtpResendAvailableAt = 0;
+        clearEmailOtpSession();
         authFlowInProgress = false;
         resetSecurityForms();
         await finishSignedInUser(user);
@@ -882,23 +1012,33 @@ $("resendEmailOtp").addEventListener("click", async event => {
             silent: true
         }), "Sending…");
 
+        pendingEmailOtpMaskedEmail = result.maskedEmail || pendingEmailOtpEmail;
         emailOtpResendAvailableAt = Date.now() + (Number(result.resendAfterSeconds || 60) * 1000);
+        emailOtpExpiresAt = Date.now() + (Number(result.expiresInSeconds || 600) * 1000);
+        saveEmailOtpSession();
         $("emailOtpCode").value = "";
-        $("emailOtpDestination").textContent = `New code sent to ${result.maskedEmail || pendingEmailOtpEmail}.`;
+        $("emailOtpDestination").textContent = `New code sent to ${pendingEmailOtpMaskedEmail}.`;
         setMessage("emailOtpMessage", "A new 6-digit code was sent.", "success");
+        startEmailOtpCountdown();
         $("emailOtpCode").focus();
     } catch (error) {
         if (Number(error?.retryAfterSeconds) > 0) {
             emailOtpResendAvailableAt = Date.now() + (Number(error.retryAfterSeconds) * 1000);
+            if (!emailOtpExpiresAt) emailOtpExpiresAt = Date.now() + (10 * 60 * 1000);
+            saveEmailOtpSession();
+            startEmailOtpCountdown();
+            setMessage("emailOtpMessage", "A recent code is still active. Use the countdown before requesting another code.");
+        } else {
+            setMessage("emailOtpMessage", error.message || "Could not resend the email code.");
         }
-        setMessage("emailOtpMessage", error.message || "Could not resend the email code.");
     }
 });
 
 // Cancels email-code sign in and returns to the login form
 $("cancelEmailOtp").addEventListener("click", () => {
+    clearEmailOtpSession();
     resetSecurityForms();
-    setSignInMethod("email-otp");
+    setSignInMethod("email-otp", { preserveOtpSession: true });
     $("emailOtpEmail").focus();
 });
 
@@ -2635,5 +2775,6 @@ $("modalClose").addEventListener("click", closeModal);
 $("modal").addEventListener("click", event => { if (event.target === $("modal")) closeModal(); });
 document.addEventListener("keydown", event => { if (event.key === "Escape") closeModal(); });
 
-showAuthMode("login");
+showAuthMode("login", { preserveOtpSession: true });
+restoreEmailOtpSession();
 boot();

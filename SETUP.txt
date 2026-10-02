@@ -7,12 +7,10 @@ https://github.com/ephiciel/xtech-automation-alpha.git
 
 1. GET ACCESS
 -------------
-The repository is private.
+The repository is public.
 
-The repository owner must add your GitHub account as a collaborator:
-GitHub Repository > Settings > Collaborators > Add people
-
-Accept the invitation before cloning.
+Anyone can clone and review the repository without a collaborator invitation.
+A collaborator invitation is only needed if a classmate should be able to push branches directly to the repository.
 
 2. INSTALL REQUIRED SOFTWARE
 ----------------------------
@@ -184,6 +182,11 @@ Check that your local .env contains the required Firebase configuration values.
 
 If Email OTP does not send:
 Check the SMTP settings in .env.
+
+V19 login notes:
+- Forgot password? is available under Password + Authenticator on the login page.
+- Email OTP resend uses a live countdown and Resend Code stays disabled until it reaches zero.
+- The OTP screen/countdown survives a normal page refresh in the same browser tab.
 
 If AI Help does not respond:
 Check the Gemini API configuration in .env.

@@ -1,4 +1,14 @@
-# XTECH Automation V18
+# XTECH Automation V19
+
+## V19 login recovery and Email OTP countdown update
+
+- Added **Forgot password?** directly to the **Password + Authenticator** login method.
+- The login reset action sends a Firebase password-reset email to the address entered on the login form.
+- Email OTP resend cooldown now counts down in real time every second.
+- The **Resend Code** button stays disabled while the cooldown is active and automatically becomes available at zero.
+- The Email OTP verification screen and resend countdown survive a normal page refresh in the same browser tab.
+- The backend remains authoritative for resend-rate limiting even if browser storage is unavailable or modified.
+- Updated the AI Help Assistant manual and project validation for the V19 login behavior.
 
 ## V18 quantity-only sales update
 
@@ -84,15 +94,15 @@ https://github.com/ephiciel/xtech-automation-alpha.git
 
 ### For classmates who only want to review the code
 
-1. Ask the repository owner to add your GitHub account as a collaborator.
-2. Accept the GitHub invitation.
-3. Clone the repository:
+The repository is public, so anyone can clone and review it without being added as a collaborator.
+
+1. Clone the repository:
 
    ```powershell
    git clone https://github.com/ephiciel/xtech-automation-alpha.git
    ```
 
-4. Enter the project folder:
+2. Enter the project folder:
 
    ```powershell
    cd xtech-automation-alpha

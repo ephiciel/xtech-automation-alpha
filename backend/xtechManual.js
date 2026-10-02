@@ -91,6 +91,13 @@ Password + Authenticator
 6. Scan the QR code with the authenticator app and enter the current 6-digit code to finish setup.
 7. XTECH opens the pages allowed for the account role.
 
+Forgot password from the login page
+1. Select Password + Authenticator.
+2. Enter the registered email address.
+3. Select Forgot password?.
+4. XTECH asks Firebase Authentication to send a password-reset email to that address.
+5. Open the email, follow the reset link, create a new password, then return to XTECH and sign in again.
+
 Email OTP
 1. Open XTECH Automation.
 2. Select Email OTP.
@@ -106,6 +113,8 @@ Email OTP security behavior
 - The code is six digits, single-use, and stored only as a secure hash on the server.
 - The default code lifetime is 10 minutes.
 - A new code cannot normally be requested until the resend cooldown has passed.
+- The resend button shows a live second-by-second countdown while the cooldown is active.
+- The countdown survives a normal page refresh because XTECH saves the local OTP screen state for the current browser tab. The backend remains the authoritative cooldown check.
 - After too many incorrect attempts, the user must request a new code.
 - Email OTP requires the XTECH server SMTP settings to be configured.
 - Email OTP is separate from Firebase TOTP Authenticator MFA. Choosing Email OTP signs in using the verified email code instead of the Password + Authenticator flow.
@@ -426,7 +435,8 @@ Changing a password
 7. After a successful password change, XTECH signs the user out and requires a fresh sign-in with the new password.
 
 Forgotten password
-- Select Send Reset Email in Account & Security to send a Firebase password-reset link to the signed-in email address.
+- From the login page, select Password + Authenticator, enter the registered email, and select Forgot password? to request a Firebase password-reset link.
+- A signed-in user can also select Send Reset Email in Account & Security.
 - Password reset emails are handled by Firebase Authentication.
 
 MY PROFILE
@@ -526,7 +536,7 @@ Why can't I change my password?
 XTECH requires the correct current password. If Authenticator MFA is enabled, a valid 6-digit Authenticator code may also be required.
 
 What if I forgot my password?
-Open Account & Security and use Send Reset Email, or use Firebase's password-reset email flow.
+On the login page, choose Password + Authenticator, enter the registered email address, and select Forgot password?. If already signed in, Account & Security also provides Send Reset Email.
 
 Why is a page missing from the sidebar?
 The signed-in account may not have permission to access that page.
@@ -554,7 +564,7 @@ How do I change my password?
 Open Account & Security, enter the current password, enter and confirm the new password, then select Change Password. If Firebase requires MFA, enter the current 6-digit Authenticator code.
 
 What if I forgot my password?
-Use Send Reset Email in Account & Security to request a Firebase password-reset email.
+From the login page, choose Password + Authenticator, enter the registered email address, and select Forgot password?. Signed-in users can also use Send Reset Email in Account & Security.
 
 Why did XTECH fail to send an Email OTP?
 The server email settings may be incomplete or incorrect. Check SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, and MAIL_FROM in the server .env file. If Gmail is used, use an App Password instead of the normal Gmail password.

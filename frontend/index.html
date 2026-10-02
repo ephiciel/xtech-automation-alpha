@@ -55,6 +55,9 @@
                             <button type="button" class="password-toggle" data-target="loginPassword" aria-label="Show password">Show</button>
                         </div>
                     </label>
+                    <div class="auth-inline-actions">
+                        <button id="forgotPasswordBtn" class="text-link" type="button">Forgot password?</button>
+                    </div>
                     <p class="helper-text auth-method-note">If this account has not set up an authenticator yet, XTECH will guide you through setup after verifying your email.</p>
                 </div>
 
@@ -81,6 +84,7 @@
                     <input id="emailOtpCode" class="otp-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" required>
                 </label>
                 <button class="primary full" type="submit">Verify Code and Sign In</button>
+                <p id="emailOtpCooldown" class="otp-cooldown" aria-live="polite"></p>
                 <div class="otp-secondary-actions">
                     <button id="resendEmailOtp" class="ghost" type="button">Resend Code</button>
                     <button id="cancelEmailOtp" class="ghost" type="button">Cancel</button>

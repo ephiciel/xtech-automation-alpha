@@ -41,7 +41,7 @@ if (duplicates.length) fail(`duplicate HTML IDs: ${[...new Set(duplicates)].join
 else pass("HTML IDs are unique");
 
 const requiredIds = [
-  "loginForm", "registerForm", "passwordTotpMethod", "emailOtpMethod", "emailOtpForm", "totpChallengeForm", "totpEnrollForm",
+  "loginForm", "registerForm", "passwordTotpMethod", "emailOtpMethod", "forgotPasswordBtn", "emailOtpForm", "emailOtpCooldown", "totpChallengeForm", "totpEnrollForm",
   "productTable", "transactionTable", "customerTable",
   "pickupTable", "saleTable", "userTable", "reportTableBody", "reportRowCount", "exportCurrentCsv", "printReport",
   "security", "securityEmailOtpStatus", "changePasswordForm", "sendResetPasswordBtn", "modal", "toast"
@@ -60,6 +60,14 @@ const disallowedFinancialUi = /(?:₱|\bprice\b|\bpricing\b|\brevenue\b|total am
 const financialUiHits = quantityOnlyFiles.filter(file => disallowedFinancialUi.test(fs.readFileSync(path.join(root, file), "utf8")));
 if (financialUiHits.length) fail(`quantity-only workflow contains monetary UI text: ${financialUiHits.join(", ")}`);
 else pass("quantity-only workflow has no monetary UI text");
+
+
+const appJs = fs.readFileSync(path.join(root, "frontend/js/app.js"), "utf8");
+if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) && /sendPasswordResetEmail/.test(appJs)) {
+  pass("V19 login recovery and persistent OTP countdown are present");
+} else {
+  fail("V19 login recovery or persistent OTP countdown is missing");
+}
 
 const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
 if (/serviceAccountKey\.json/.test(gitignore) && /^\.env$/m.test(gitignore)) pass("secret files are ignored by Git");

@@ -1,5 +1,16 @@
 XTECH AUTOMATION CHANGELOG
 
+Version 19
+----------
+Login Recovery and Email OTP Cooldown
+- Added Forgot password? to the Password + Authenticator login form.
+- Password-reset emails are sent through Firebase Authentication using the email entered on the login page.
+- Added a live second-by-second Email OTP resend countdown.
+- Resend Code is disabled until the cooldown reaches zero.
+- Email OTP resend state survives a normal page refresh in the same browser tab.
+- The server remains authoritative for OTP resend cooldown enforcement.
+- Updated the AI Help Assistant manual and project validation for the new login behavior.
+
 Version 18
 ----------
 Quantity-Only Sales and Reporting

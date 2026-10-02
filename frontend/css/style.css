@@ -2441,3 +2441,47 @@ body.dark .ai-bubble {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Keeps the forgot-password action compact under the password field */
+.auth-inline-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
+.text-link {
+  width: auto;
+  min-height: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+.text-link:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+/* Shows the live Email OTP resend cooldown */
+.otp-cooldown {
+  min-height: 20px;
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+#resendEmailOtp:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}

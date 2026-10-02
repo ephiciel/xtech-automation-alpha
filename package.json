@@ -1,6 +1,6 @@
 {
   "name": "xtech-automation",
-  "version": "2.5.0",
+  "version": "19.0.0",
   "description": "XTECH Automation inventory, pickup and sales monitoring system",
   "main": "backend/server.js",
   "scripts": {
