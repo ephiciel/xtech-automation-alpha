@@ -951,7 +951,11 @@ $("loginForm").addEventListener("submit", async event => {
         const factors = firebaseAuthApi.multiFactor(credential.user).enrolledFactors;
         const hasTotp = factors.some(factor => factor.factorId === firebaseAuthApi.TotpMultiFactorGenerator.FACTOR_ID);
 
-        if (!hasTotp) {
+        const adminMfaBypass =
+            config.adminMfaBypass === true &&
+            credential.user.email?.toLowerCase() === config.adminEmail?.toLowerCase();
+
+        if (!hasTotp && !adminMfaBypass) {
             await beginTotpEnrollment(credential.user);
             return;
         }

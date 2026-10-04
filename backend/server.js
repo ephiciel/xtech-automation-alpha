@@ -16,6 +16,9 @@ const {
     verifyOtpHash
 } = require("./mailer");
 
+adminEmail: process.env.ADMIN_EMAIL || "",
+    adminMfaBypass: process.env.ADMIN_MFA_BYPASS === "true",
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
