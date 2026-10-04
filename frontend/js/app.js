@@ -15,6 +15,7 @@ let reportCacheQuery = null;
 let charts = {};
 let pendingRequests = 0;
 let currentSectionName = "dashboard";
+let appConfig = {};
 
 // Stores Firebase modular authentication helpers and temporary MFA state
 let firebaseAppInstance = null;
@@ -538,14 +539,22 @@ async function loadFirebaseAuthApi() {
 
 // Loads the Firebase settings and starts Firebase Authentication
 async function initFirebase() {
-    const config = await api("/api/config", { silent: true });
-    if (!config.apiKey || !config.projectId || !config.appId) {
+    appConfig = await api("/api/config", { silent: true });
+
+    if (!appConfig.apiKey || !appConfig.projectId || !appConfig.appId) {
         throw new Error("Firebase web configuration is missing. Check FIREBASE_API_KEY, FIREBASE_PROJECT_ID, and FIREBASE_APP_ID in .env.");
     }
 
     const firebaseApi = await loadFirebaseAuthApi();
-    if (!firebaseAppInstance) firebaseAppInstance = firebaseApi.initializeApp(config);
-    if (!firebaseAuthInstance) firebaseAuthInstance = firebaseApi.getAuth(firebaseAppInstance);
+
+    if (!firebaseAppInstance) {
+        firebaseAppInstance = firebaseApi.initializeApp(appConfig);
+    }
+
+    if (!firebaseAuthInstance) {
+        firebaseAuthInstance = firebaseApi.getAuth(firebaseAppInstance);
+    }
+
     return firebaseAuthInstance;
 }
 
@@ -952,8 +961,8 @@ $("loginForm").addEventListener("submit", async event => {
         const hasTotp = factors.some(factor => factor.factorId === firebaseAuthApi.TotpMultiFactorGenerator.FACTOR_ID);
 
         const adminMfaBypass =
-            config.adminMfaBypass === true &&
-            credential.user.email?.toLowerCase() === config.adminEmail?.toLowerCase();
+            appConfig.adminMfaBypass === true &&
+            credential.user.email?.toLowerCase() === appConfig.adminEmail?.toLowerCase();
 
         if (!hasTotp && !adminMfaBypass) {
             await beginTotpEnrollment(credential.user);
