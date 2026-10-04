@@ -16,9 +16,6 @@ const {
     verifyOtpHash
 } = require("./mailer");
 
-adminEmail: process.env.ADMIN_EMAIL || "",
-    adminMfaBypass: process.env.ADMIN_MFA_BYPASS === "true",
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -318,7 +315,9 @@ app.get("/api/config", (req, res) => {
         projectId: process.env.FIREBASE_PROJECT_ID || "",
         storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "",
         messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
-        appId: process.env.FIREBASE_APP_ID || ""
+        appId: process.env.FIREBASE_APP_ID || "",
+        adminEmail: process.env.ADMIN_EMAIL || "",
+        adminMfaBypass: process.env.ADMIN_MFA_BYPASS === "true"
     });
 });
 
