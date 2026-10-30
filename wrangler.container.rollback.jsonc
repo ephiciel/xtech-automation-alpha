@@ -1,0 +1,51 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "xtech-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-30",
+  "upload_source_maps": true,
+
+  "routes": [
+    {
+      "pattern": "xtech-automation.com/api/*",
+      "zone_name": "xtech-automation.com"
+    }
+  ],
+
+  "containers": [
+    {
+      "class_name": "XtechBackendV2",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "dockerfile": "./Dockerfile",
+          "build_context": "."
+        }
+      }
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "BACKEND",
+        "class_name": "XtechBackendV2"
+      }
+    ]
+  },
+
+  "exports": {
+    "XtechBackend": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "XtechBackendV2": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}
