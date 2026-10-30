@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 const BACKEND_PORT = 3000;
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
-export class XtechBackend extends DurableObject {
+class XtechBackendBase extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
 
@@ -15,8 +15,6 @@ export class XtechBackend extends DurableObject {
   }
 
   getContainerEnv() {
-    // Forward all string Worker variables/secrets into the Node container.
-    // Durable Object bindings (such as BACKEND) are objects and are skipped.
     const result = {};
 
     for (const [key, value] of Object.entries(this.env)) {
@@ -52,22 +50,15 @@ export class XtechBackend extends DurableObject {
     const port = container.getTcpPort(BACKEND_PORT);
     let lastError;
 
-    // Container startup is asynchronous. Wait until the existing XTECH
-    // /api/status endpoint responds before proxying the user's request.
     for (let attempt = 0; attempt < 120; attempt++) {
       try {
-        const response = await port.fetch(
-          `http://container/api/status`,
-          {
-            method: "GET",
-            signal: AbortSignal.timeout(1000),
-          }
-        );
+        const response = await port.fetch("http://container/api/status", {
+          method: "GET",
+          signal: AbortSignal.timeout(1000),
+        });
 
         await response.body?.cancel();
 
-        // Any HTTP response proves Express is listening. A 2xx is ideal,
-        // but even another HTTP status means the port is ready.
         if (response.status > 0) {
           return port;
         }
@@ -87,9 +78,7 @@ export class XtechBackend extends DurableObject {
     try {
       const port = await this.ensureBackendReady();
 
-      const incoming = new URL(request.url);
       const target = new URL(request.url);
-
       target.protocol = "http:";
       target.hostname = "container";
       target.port = "";
@@ -107,8 +96,7 @@ export class XtechBackend extends DurableObject {
         init.body = request.body;
       }
 
-      const proxiedRequest = new Request(target.toString(), init);
-      return await port.fetch(proxiedRequest);
+      return await port.fetch(new Request(target.toString(), init));
     } catch (error) {
       console.error("XTECH backend proxy error:", error);
 
@@ -123,10 +111,16 @@ export class XtechBackend extends DurableObject {
   }
 }
 
+// Keep the old class exported so Cloudflare does not have to delete/rename
+// the old Durable Object namespace during this repair.
+export class XtechBackend extends XtechBackendBase {}
+
+// New class = new Durable Object namespace + fresh Container assignment.
+export class XtechBackendV2 extends XtechBackendBase {}
+
 export default {
   async fetch(request, env) {
-    // One deterministic backend instance for the XTECH application.
-    const backend = env.BACKEND.getByName("xtech-production");
+    const backend = env.BACKEND.getByName("xtech-production-v2");
     return backend.fetch(request);
   },
 };
