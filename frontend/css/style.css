@@ -992,16 +992,14 @@ tbody tr:last-child td {
 
 /* Styles the login and registration screens */
 .login-screen {
-  position: relative;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  padding: 24px;
-  background:
-    radial-gradient(circle at 12% 8%, rgba(37, 99, 235, 0.16), transparent 34%),
-    radial-gradient(circle at 88% 92%, rgba(124, 58, 237, 0.12), transparent 30%),
-    var(--bg);
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    overflow-x: hidden;
+    padding: 24px;
+    background: radial-gradient(circle at 12% 8%, rgba(37, 99, 235, 0.16), transparent 34%), radial-gradient(circle at 88% 92%, rgba(124, 58, 237, 0.12), transparent 30%), var(--bg);
 }
 
 .login-screen::before {
@@ -1017,17 +1015,19 @@ tbody tr:last-child td {
 }
 
 .login-card {
-  position: relative;
-  z-index: 1;
-  width: min(550px, 96vw);
-  padding: 30px;
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 550px;
+    margin-inline: auto;
+    padding: 30px;
+    background: color-mix(in srgb, var(--panel) 94%, transparent);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
 }
 
 .login-header {
@@ -1982,9 +1982,12 @@ body.dark .ai-bubble {
     min-height: 0;
   }
 
-  .login-card {
-    padding: 22px;
-  }
+   .login-card {
+       width: 100%;
+       max-width: 550px;
+       margin-inline: auto;
+       padding: 22px;
+   }
 
   .auth-tabs {
     grid-template-columns: 1fr;
@@ -2000,51 +2003,62 @@ body.dark .ai-bubble {
 }
 
 @media (max-width: 480px) {
-  .ai-bubble {
-    right: 14px;
-    bottom: 14px;
-    min-width: 52px;
-    width: 52px;
-    padding: 0;
-  }
+    .ai-bubble {
+        right: 14px;
+        bottom: 14px;
+        min-width: 52px;
+        width: 52px;
+        padding: 0;
+    }
 
-  .ai-bubble-label {
-    display: none;
-  }
+    .ai-bubble-label {
+        display: none;
+    }
 
-  .ai-chat-panel {
-    right: 10px;
-    bottom: 76px;
-    width: calc(100vw - 20px);
-    height: min(600px, calc(100vh - 96px));
-  }
+    .ai-chat-panel {
+        right: 10px;
+        bottom: 76px;
+        width: calc(100vw - 20px);
+        height: min(600px, calc(100vh - 96px));
+    }
 
-  .metrics,
-  .metrics-6,
-  .export-grid {
-    grid-template-columns: 1fr;
-  }
+    .metrics,
+    .metrics-6,
+    .export-grid {
+        grid-template-columns: 1fr;
+    }
 
-  .page-actions button {
-    flex: 1 1 100%;
-  }
+    .page-actions button {
+        flex: 1 1 100%;
+    }
 
-  .theme-label {
-    display: none;
-  }
+    .theme-label {
+        display: none;
+    }
 
-  .theme-toggle {
-    width: 38px;
-    padding: 7px;
-  }
+    .theme-toggle {
+        width: 38px;
+        padding: 7px;
+    }
 
-  .login-header {
-    align-items: flex-start;
-  }
+    .login-screen {
+        padding: 12px;
+    }
 
-  .login-card .brand {
-    font-size: 21px;
-  }
+    .login-card {
+        width: 100%;
+        max-width: 100%;
+        margin-inline: auto;
+        padding: 20px;
+    }
+
+    .login-header {
+        align-items: flex-start;
+    }
+
+    .login-card .brand {
+        font-size: 21px;
+    }
 }
 
 @media (max-width: 760px) {
