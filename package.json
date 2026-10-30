@@ -10,13 +10,20 @@
     "test": "node scripts/validate.js",
     "check": "node scripts/validate.js",
     "enable:totp": "node scripts/enable-totp.js",
-    "cleanup:v18": "node scripts/cleanup-v18-data.js"
+    "cleanup:v18": "node scripts/cleanup-v18-data.js",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy",
+    "cf:whoami": "wrangler whoami"
   },
   "dependencies": {
     "@google/genai": "^2.23.0",
+    "@ljoukov/firebase-admin-cloudflare": "^0.0.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "firebase": "^12.18.0",
     "firebase-admin": "^14.3.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.156.0"
   }
 }

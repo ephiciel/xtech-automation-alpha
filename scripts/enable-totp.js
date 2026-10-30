@@ -1,8 +1,9 @@
-// Enables Firebase TOTP multi-factor authentication for the XTECH project
-const { auth } = require("../backend/firebase");
+require("dotenv").config();
+const { initFirebase } = require("../backend/firebase");
 
 async function enableTotp() {
     try {
+        const { auth } = await initFirebase();
         await auth.projectConfigManager().updateProjectConfig({
             multiFactorConfig: {
                 providerConfigs: [

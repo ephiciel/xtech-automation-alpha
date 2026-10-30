@@ -1,45 +1,95 @@
-const { initializeApp, cert, getApps } = require("firebase-admin/app");
-const { getFirestore, Timestamp } = require("firebase-admin/firestore");
-const { getAuth } = require("firebase-admin/auth");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
+const {
+    initializeApp: initializeAdminApp,
+    cert,
+    getApps: getAdminApps
+} = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 
-// Uses Render's secret file in production and the local key during development.
-const localKeyPath = path.join(__dirname, "serviceAccountKey.json");
-const renderKeyPath = "/etc/secrets/serviceAccountKey.json";
-const configuredKeyPath = String(process.env.FIREBASE_SERVICE_ACCOUNT_PATH || "").trim();
+let servicesPromise = null;
 
-const candidatePaths = [configuredKeyPath, renderKeyPath, localKeyPath].filter(Boolean);
-const keyPath = candidatePaths.find((candidate) => fs.existsSync(candidate));
+function loadServiceAccount() {
+    const fromEnv = String(
+        process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+        process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
+        ""
+    ).trim();
 
-if (!keyPath) {
-    throw new Error(
-        "Firebase service account not found. Add backend/serviceAccountKey.json locally or serviceAccountKey.json as a Render Secret File."
-    );
+    let serviceAccount;
+
+    if (fromEnv) {
+        try {
+            serviceAccount = JSON.parse(fromEnv);
+        } catch (error) {
+            throw new Error(`GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: ${error.message}`);
+        }
+    } else {
+        const isCloudflareWorker = process.env.CLOUDFLARE_WORKER === "true";
+
+        if (isCloudflareWorker) {
+            throw new Error(
+                "GOOGLE_SERVICE_ACCOUNT_JSON is missing from Cloudflare Worker secrets. Add the full Firebase serviceAccountKey.json contents as a Cloudflare Secret."
+            );
+        }
+
+        const localKeyPath = path.resolve(process.cwd(), "backend", "serviceAccountKey.json");
+        if (!fs.existsSync(localKeyPath)) {
+            throw new Error(
+                "Firebase service account not found. Add backend/serviceAccountKey.json locally or set GOOGLE_SERVICE_ACCOUNT_JSON."
+            );
+        }
+
+        try {
+            serviceAccount = JSON.parse(fs.readFileSync(localKeyPath, "utf8"));
+        } catch (error) {
+            throw new Error(`Could not load Firebase service account: ${error.message}`);
+        }
+    }
+
+    if (!serviceAccount?.project_id) {
+        throw new Error("Firebase service account is missing project_id.");
+    }
+
+    if (serviceAccount.project_id !== "xtech-automation") {
+        throw new Error(
+            `Wrong Firebase project. Expected xtech-automation but got ${serviceAccount.project_id}`
+        );
+    }
+
+    return serviceAccount;
 }
 
-let serviceAccount;
-try {
-    serviceAccount = JSON.parse(fs.readFileSync(keyPath, "utf8"));
-} catch (error) {
-    throw new Error(`Could not load Firebase service account from ${keyPath}: ${error.message}`);
+async function initFirebase() {
+    if (servicesPromise) return servicesPromise;
+
+    servicesPromise = (async () => {
+        const serviceAccount = loadServiceAccount();
+
+        let adminApp = getAdminApps()[0];
+        if (!adminApp) {
+            adminApp = initializeAdminApp({
+                credential: cert(serviceAccount),
+                projectId: serviceAccount.project_id
+            });
+        }
+
+        const auth = getAuth(adminApp);
+
+        const cloudflareAppModule = await import("@ljoukov/firebase-admin-cloudflare/app");
+        const cloudflareFirestoreModule = await import("@ljoukov/firebase-admin-cloudflare/firestore");
+
+        const firestoreApp = cloudflareAppModule.initializeApp({
+            serviceAccountJson: JSON.stringify(serviceAccount)
+        });
+        const db = cloudflareFirestoreModule.getFirestore(firestoreApp);
+        const Timestamp = cloudflareFirestoreModule.Timestamp;
+        const FieldValue = cloudflareFirestoreModule.FieldValue;
+
+        return { db, auth, Timestamp, FieldValue };
+    })();
+
+    return servicesPromise;
 }
 
-if (!serviceAccount.project_id) {
-    throw new Error("Firebase service account is missing project_id.");
-}
-
-if (serviceAccount.project_id !== "xtech-automation") {
-    throw new Error(
-        `Wrong Firebase project. Expected xtech-automation but got ${serviceAccount.project_id}`
-    );
-}
-
-if (!getApps().length) {
-    initializeApp({ credential: cert(serviceAccount) });
-}
-
-const db = getFirestore();
-const auth = getAuth();
-
-module.exports = { db, auth, Timestamp };
+module.exports = { initFirebase };

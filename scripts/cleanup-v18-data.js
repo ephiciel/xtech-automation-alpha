@@ -1,7 +1,5 @@
 require("dotenv").config();
-
-const { FieldValue } = require("firebase-admin/firestore");
-const { db } = require("../backend/firebase");
+const { initFirebase } = require("../backend/firebase");
 
 if (!process.argv.includes("--confirm")) {
     console.log("This cleanup permanently removes legacy monetary fields from old product and sales records.");
@@ -9,7 +7,7 @@ if (!process.argv.includes("--confirm")) {
     process.exit(0);
 }
 
-async function commitInBatches(operations) {
+async function commitInBatches(db, operations) {
     for (let index = 0; index < operations.length; index += 400) {
         const batch = db.batch();
         for (const operation of operations.slice(index, index + 400)) {
@@ -20,6 +18,7 @@ async function commitInBatches(operations) {
 }
 
 async function main() {
+    const { db, FieldValue } = await initFirebase();
     const [productSnap, saleSnap] = await Promise.all([
         db.collection("products").get(),
         db.collection("sales").get()
@@ -65,8 +64,8 @@ async function main() {
         }
     }
 
-    await commitInBatches(productUpdates);
-    await commitInBatches(saleUpdates);
+    await commitInBatches(db, productUpdates);
+    await commitInBatches(db, saleUpdates);
 
     console.log(`Updated ${productUpdates.length} product record(s).`);
     console.log(`Updated ${saleUpdates.length} sales record(s).`);

@@ -2073,3 +2073,11 @@ if (require.main === module) {
 }
 
 module.exports = { app, startServer };
+
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok" });
+});
+
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`XTECH backend running on port ${PORT}`);
+});

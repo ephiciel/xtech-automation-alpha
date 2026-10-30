@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { db, auth, Timestamp } = require("./firebase");
+const { initFirebase } = require("./firebase");
 
 (async () => {
     const email = process.env.ADMIN_EMAIL;
@@ -12,6 +12,7 @@ const { db, auth, Timestamp } = require("./firebase");
     }
 
     try {
+        const { db, auth, Timestamp } = await initFirebase();
         let user;
         try {
             user = await auth.getUserByEmail(email);
