@@ -1,4 +1,4 @@
-const isCloudflareWorker = process.env.CLOUDFLARE_WORKER === "true";
+﻿const isCloudflareWorker = process.env.CLOUDFLARE_WORKER === "true";
 if (!isCloudflareWorker) require("dotenv").config();
 
 const express = require("express");
@@ -2078,6 +2078,3 @@ app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`XTECH backend running on port ${PORT}`);
-});
