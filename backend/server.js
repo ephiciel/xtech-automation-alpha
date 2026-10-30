@@ -331,6 +331,23 @@ function roles(...allowed) {
     };
 }
 
+const notificationCollectionFor = uid => db.collection("users").doc(uid).collection("notifications");
+
+function queueCustomerNotification(transaction, uid, details) {
+    if (!uid) return;
+    const ref = notificationCollectionFor(uid).doc();
+    transaction.set(ref, {
+        notificationID: ref.id,
+        type: String(details.type || "general"),
+        title: String(details.title || "XTECH notification"),
+        message: String(details.message || ""),
+        relatedType: String(details.relatedType || ""),
+        relatedId: String(details.relatedId || ""),
+        read: false,
+        createdAt: details.createdAt || now()
+    });
+}
+
 /* SYSTEM */
 app.get("/api/status", (req, res) => {
     res.json({ success: true, message: "XTECH Automation server is connected.", timestamp: new Date().toISOString() });
@@ -365,6 +382,56 @@ app.get("/api/firebase-test", authRequired, roles("admin"), async (req, res) => 
 /* AUTH + ACCOUNT MANAGEMENT */
 app.get("/api/auth/me", authRequired, (req, res) => {
     res.json({ success: true, user: serialize(req.user), profile: serialize(req.profile) });
+});
+
+
+/* CUSTOMER NOTIFICATIONS */
+app.get("/api/notifications", authRequired, roles("customer"), async (req, res) => {
+    try {
+        const snapshot = await notificationCollectionFor(req.user.uid)
+            .orderBy("createdAt", "desc")
+            .limit(100)
+            .get();
+        const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...serialize(doc.data()) }));
+        res.json({
+            success: true,
+            notifications,
+            unreadCount: notifications.filter(item => item.read !== true).length
+        });
+    } catch (error) {
+        console.error("Notification load error:", error?.message || error);
+        res.status(500).json({ success: false, message: "Unable to load notifications." });
+    }
+});
+
+app.patch("/api/notifications/read-all", authRequired, roles("customer"), async (req, res) => {
+    try {
+        const snapshot = await notificationCollectionFor(req.user.uid).get();
+        const timestamp = now();
+        const unreadDocs = snapshot.docs.filter(doc => doc.data().read !== true);
+        await Promise.all(unreadDocs.map(doc => doc.ref.update({ read: true, readAt: timestamp })));
+        res.json({ success: true, updated: unreadDocs.length });
+    } catch (error) {
+        console.error("Notification read-all error:", error?.message || error);
+        res.status(500).json({ success: false, message: "Unable to mark notifications as read." });
+    }
+});
+
+app.patch("/api/notifications/:id/read", authRequired, roles("customer"), async (req, res) => {
+    try {
+        const ref = notificationCollectionFor(req.user.uid).doc(req.params.id);
+        const snapshot = await ref.get();
+        if (!snapshot.exists) {
+            return res.status(404).json({ success: false, message: "Notification not found." });
+        }
+        if (snapshot.data().read !== true) {
+            await ref.update({ read: true, readAt: now() });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Notification read error:", error?.message || error);
+        res.status(500).json({ success: false, message: "Unable to update notification." });
+    }
 });
 
 // Creates and emails a short-lived code for sign-in or registration verification
@@ -1418,6 +1485,16 @@ app.patch("/api/pickups/:id/status", authRequired, roles("admin", "secretary", "
                     completedBy: req.user.uid,
                     updatedAt: timestamp
                 });
+
+
+                queueCustomerNotification(transaction, pickup.customerUID, {
+                    type: "pickup_completed",
+                    title: "Pickup completed",
+                    message: "Your pickup has been completed successfully.",
+                    relatedType: "pickup",
+                    relatedId: pickup.pickupID,
+                    createdAt: timestamp
+                });
             });
         } else if (status === "Approved") {
             // Recheck the current admin inventory before a request can be approved.
@@ -1447,6 +1524,16 @@ app.patch("/api/pickups/:id/status", authRequired, roles("admin", "secretary", "
                     approvedAt: timestamp,
                     approvedBy: req.user.uid,
                     updatedAt: timestamp
+                });
+
+
+                queueCustomerNotification(transaction, pickup.customerUID, {
+                    type: "pickup_approved",
+                    title: "Pickup approved",
+                    message: "Your pickup request has been approved.",
+                    relatedType: "pickup",
+                    relatedId: pickup.pickupID,
+                    createdAt: timestamp
                 });
             });
         } else {
@@ -1495,6 +1582,7 @@ app.post("/api/sales", authRequired, roles("admin", "secretary"), async (req, re
             customerData = customerSnap.data();
         }
 
+        const customerUID = customerData?.userUID || null;
         const saleRef = db.collection("sales").doc();
         let sale;
         await db.runTransaction(async transaction => {
@@ -1540,6 +1628,7 @@ app.post("/api/sales", authRequired, roles("admin", "secretary"), async (req, re
             sale = {
                 saleID: saleRef.id,
                 customerID,
+                customerUID,
                 customerName: customerData?.name || "Walk-in / No registered customer",
                 items: lineItems,
                 notes,
@@ -1549,6 +1638,15 @@ app.post("/api/sales", authRequired, roles("admin", "secretary"), async (req, re
                 createdByName: req.user.name || req.user.email || "System"
             };
             transaction.set(saleRef, sale);
+
+            queueCustomerNotification(transaction, customerUID, {
+                type: "purchase_recorded",
+                title: "Purchase recorded",
+                message: "Your purchase has been recorded successfully.",
+                relatedType: "sale",
+                relatedId: saleRef.id,
+                createdAt: timestamp
+            });
         });
 
         res.status(201).json({ success: true, sale: operationalSale(sale) });

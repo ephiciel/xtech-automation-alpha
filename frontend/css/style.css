@@ -350,6 +350,230 @@ body.dark .primary {
   font-weight: 600;
 }
 
+/* Styles customer notification controls and history */
+.notification-center {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.notification-bell {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel-soft);
+  color: var(--text-soft);
+  box-shadow: var(--shadow-xs);
+}
+
+.notification-bell:hover:not(:disabled),
+.notification-bell[aria-expanded="true"] {
+  transform: none;
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  color: var(--primary);
+}
+
+.notification-bell-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 2px solid var(--topbar-bg);
+  border-radius: 999px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 850;
+}
+
+.notification-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 90;
+  width: min(380px, calc(100vw - 28px));
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  box-shadow: var(--shadow-lg);
+}
+
+.notification-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 15px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-menu-head strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.notification-menu-head small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.notification-text-btn,
+.notification-view-all {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--primary);
+  font-size: 11px;
+}
+
+.notification-text-btn:hover:not(:disabled),
+.notification-view-all:hover:not(:disabled) {
+  transform: none;
+  background: var(--primary-soft);
+}
+
+.notification-menu-list {
+  max-height: 390px;
+  overflow-y: auto;
+}
+
+.notification-view-all {
+  width: 100%;
+  padding: 11px 14px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  font-weight: 750;
+}
+
+.notification-list {
+  display: grid;
+}
+
+.notification-item {
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 10px;
+  gap: 10px;
+  align-items: start;
+  padding: 13px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--text-soft);
+  box-shadow: none;
+  text-align: left;
+}
+
+.notification-item:last-child {
+  border-bottom: 0;
+}
+
+.notification-item:hover:not(:disabled) {
+  transform: none;
+  background: var(--panel-soft);
+}
+
+.notification-item.unread {
+  background: color-mix(in srgb, var(--primary-soft) 62%, var(--panel));
+}
+
+.notification-item-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.notification-item-body {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.notification-item-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notification-item-message {
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.notification-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.notification-reference {
+  overflow-wrap: anywhere;
+}
+
+.notification-unread-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.notification-empty {
+  padding: 28px 18px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+
+.notification-page-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.notification-page-list .notification-item {
+  grid-template-columns: 38px minmax(0, 1fr) 10px;
+  padding: 16px 18px;
+}
+
+.notification-page-list .notification-item-icon {
+  width: 38px;
+  height: 38px;
+}
+
 /* Controls the sidebar & main page layout */
 .layout {
   display: flex;
@@ -413,6 +637,7 @@ body.dark .primary {
 .nav[data-section="transactions"]::before { content: "↕"; }
 .nav[data-section="customers"]::before { content: "◉"; }
 .nav[data-section="pickups"]::before { content: "⇄"; }
+.nav[data-section="notifications"]::before { content: "●"; }
 .nav[data-section="sales"]::before { content: "S"; }
 .nav[data-section="users"]::before { content: "♙"; }
 .nav[data-section="reports"]::before { content: "▥"; }
@@ -1903,6 +2128,15 @@ body.dark .ai-bubble {
     flex-wrap: wrap;
   }
 
+  .notification-menu {
+    position: fixed;
+    top: 72px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100dvh - 92px);
+  }
+
   #userEmail {
     max-width: 100%;
     flex: 1 1 180px;
@@ -2003,44 +2237,55 @@ body.dark .ai-bubble {
 }
 
 @media (max-width: 480px) {
-    .ai-bubble {
-        right: 14px;
-        bottom: 14px;
-        min-width: 52px;
-        width: 52px;
-        padding: 0;
-    }
+  .ai-bubble {
+    right: 14px;
+    bottom: 14px;
+    min-width: 52px;
+    width: 52px;
+    padding: 0;
+  }
 
-    .ai-bubble-label {
-        display: none;
-    }
+  .ai-bubble-label {
+    display: none;
+  }
 
-    .ai-chat-panel {
-        right: 10px;
-        bottom: 76px;
-        width: calc(100vw - 20px);
-        height: min(600px, calc(100vh - 96px));
-    }
+  .ai-chat-panel {
+    right: 10px;
+    bottom: 76px;
+    width: calc(100vw - 20px);
+    height: min(600px, calc(100vh - 96px));
+  }
 
-    .metrics,
-    .metrics-6,
-    .export-grid {
-        grid-template-columns: 1fr;
-    }
+  .metrics,
+  .metrics-6,
+  .export-grid {
+    grid-template-columns: 1fr;
+  }
 
-    .page-actions button {
-        flex: 1 1 100%;
-    }
+  .page-actions button {
+    flex: 1 1 100%;
+  }
 
-    .theme-label {
-        display: none;
-    }
+  .theme-label {
+    display: none;
+  }
 
-    .theme-toggle {
-        width: 38px;
-        padding: 7px;
-    }
+  .theme-toggle {
+    width: 38px;
+    padding: 7px;
+  }
 
+  .login-header {
+    align-items: flex-start;
+  }
+
+  .login-card .brand {
+    font-size: 21px;
+  }
+}
+
+
+@media (max-width: 480px) {
     .login-screen {
         padding: 12px;
     }

@@ -13,6 +13,8 @@ const files = [
   "frontend/js/app.js",
   "frontend/index.html",
   "frontend/css/style.css",
+  "worker/index.mjs",
+  "wrangler.jsonc",
   "package.json"
 ];
 
@@ -25,7 +27,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js"]) {
+for (const file of ["backend/server.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -44,7 +46,8 @@ const requiredIds = [
   "loginForm", "registerForm", "passwordTotpMethod", "emailOtpMethod", "forgotPasswordBtn", "emailOtpForm", "emailOtpCooldown", "totpChallengeForm", "totpEnrollForm",
   "productTable", "transactionTable", "customerTable",
   "pickupTable", "saleTable", "userTable", "reportTableBody", "reportRowCount", "exportCurrentCsv", "printReport",
-  "security", "securityEmailOtpStatus", "changePasswordForm", "sendResetPasswordBtn", "modal", "toast"
+  "security", "securityEmailOtpStatus", "changePasswordForm", "sendResetPasswordBtn", "modal", "toast",
+  "notificationCenter", "notificationBell", "notificationBadge", "notificationMenu", "notificationPageList"
 ];
 const missingIds = requiredIds.filter(id => !ids.includes(id));
 if (missingIds.length) fail(`required HTML IDs missing: ${missingIds.join(", ")}`);
@@ -83,15 +86,42 @@ const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
 if (/serviceAccountKey\.json/.test(gitignore) && /^\.env$/m.test(gitignore)) pass("secret files are ignored by Git");
 else fail(".gitignore must include .env and backend/serviceAccountKey.json");
 
-// V21 deployment checks
+// Cloudflare Workers deployment checks
 const firebaseJs = fs.readFileSync(path.join(root, "backend/firebase.js"), "utf8");
-if (/\/etc\/secrets\/serviceAccountKey\.json/.test(firebaseJs)) pass("Render Firebase secret-file support is present");
-else fail("backend/firebase.js must support /etc/secrets/serviceAccountKey.json");
+const wranglerConfig = fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8");
+const workerJs = fs.readFileSync(path.join(root, "worker/index.mjs"), "utf8");
 
-if (/app\.listen\(PORT,\s*["']0\.0\.0\.0["']/.test(serverJs)) pass("server binds to 0.0.0.0 for Render");
-else fail("backend/server.js must bind to 0.0.0.0");
+if (/GOOGLE_SERVICE_ACCOUNT_JSON/.test(firebaseJs) && /@ljoukov\/firebase-admin-cloudflare/.test(firebaseJs)) {
+  pass("Cloudflare-compatible Firebase service initialization is present");
+} else {
+  fail("backend/firebase.js must support GOOGLE_SERVICE_ACCOUNT_JSON and Worker-compatible Firestore");
+}
 
-// V22 Render Free-compatible Email OTP checks
+if (/startServer/.test(serverJs) && /CLOUDFLARE_WORKER/.test(serverJs)) {
+  pass("Express server supports Cloudflare Workers startup");
+} else {
+  fail("backend/server.js must support Cloudflare Workers startup");
+}
+
+if (/(?:httpServerHandler|handleAsNodeRequest)/.test(workerJs) && /xtech-automation/.test(wranglerConfig) && /run_worker_first/.test(wranglerConfig)) {
+  pass("Cloudflare Worker entry point and static asset routing are configured");
+} else {
+  fail("Cloudflare Worker entry point or wrangler static asset routing is missing");
+}
+
+if (packageJson.dependencies?.["@ljoukov/firebase-admin-cloudflare"] && packageJson.devDependencies?.wrangler) {
+  pass("Cloudflare deployment dependencies are declared");
+} else {
+  fail("package.json must include Worker-compatible Firestore and Wrangler");
+}
+
+if (/\/api\/notifications/.test(serverJs) && /purchase_recorded/.test(serverJs) && /pickup_approved/.test(serverJs) && /pickup_completed/.test(serverJs) && /loadNotifications/.test(appJs)) {
+  pass("customer purchase and pickup notifications are configured");
+} else {
+  fail("customer notification backend or frontend is missing");
+}
+
+// V22 Resend HTTPS Email OTP checks
 const mailerJs = fs.readFileSync(path.join(root, "backend/mailer.js"), "utf8");
 const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf8");
 if (/api\.resend\.com\/emails/.test(mailerJs) && /RESEND_API_KEY/.test(mailerJs)) {

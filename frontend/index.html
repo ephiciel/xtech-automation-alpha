@@ -6,10 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f5f7fb">
     <title>XTECH Automation</title>
+    <link rel="icon" type="image/png" href="/xtech-favicon-XTA.png">
     <!-- Loads the XTECH design styles -->
     <link rel="stylesheet" href="css/style.css">
-
-    <link rel="icon" type="image/png" href="/xtech-favicon-XTA.png">
     <!-- Firebase modular authentication is loaded by app.js -->
     <!-- Loads Chart.js for dashboard charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -162,6 +161,20 @@
                 <small id="roleLabel"></small>
             </div>
             <div class="top-actions">
+                <div id="notificationCenter" class="notification-center hidden">
+                    <button id="notificationBell" class="notification-bell" type="button" aria-label="Open notifications" aria-expanded="false">
+                        <span class="notification-bell-icon" aria-hidden="true">🔔</span>
+                        <span id="notificationBadge" class="notification-badge hidden">0</span>
+                    </button>
+                    <div id="notificationMenu" class="notification-menu hidden" role="dialog" aria-label="Notifications">
+                        <div class="notification-menu-head">
+                            <div><strong>Notifications</strong><small id="notificationMenuSummary">No unread notifications</small></div>
+                            <button id="markAllNotificationsReadTop" class="notification-text-btn" type="button">Mark all read</button>
+                        </div>
+                        <div id="notificationMenuList" class="notification-list notification-menu-list"></div>
+                        <button id="viewAllNotifications" class="notification-view-all" type="button">View all notifications</button>
+                    </div>
+                </div>
                 <button type="button" class="theme-toggle topbar-theme-toggle" id="headerThemeToggle" aria-label="Switch to dark mode">
                     <span class="theme-icon">☾</span>
                     <span class="theme-label">Dark mode</span>
@@ -179,6 +192,7 @@
                 <button class="nav" data-section="transactions">Stock Movement History</button>
                 <button class="nav" data-section="customers">Customer Management</button>
                 <button class="nav" data-section="pickups">Pickup Services</button>
+                <button class="nav" data-section="notifications">Notifications</button>
                 <button class="nav" data-section="sales">Sales Transactions</button>
                 <button class="nav admin-only" data-section="users">User Accounts</button>
                 <button class="nav admin-only" data-section="reports">Reports</button>
@@ -469,6 +483,23 @@
                             <button id="exportCurrentCsv" class="secondary">Download CSV</button>
                             <button id="printReport" class="primary">Print / Save PDF</button>
                         </div>
+                    </div>
+                </section>
+
+                <!-- Shows purchase and pickup updates for the signed-in customer -->
+                <section id="notifications" class="section customer-only-section">
+                    <div class="page-head">
+                        <div>
+                            <h1>Notifications</h1>
+                            <p>Review purchase confirmations and pickup status updates for your account.</p>
+                        </div>
+                        <div class="page-actions">
+                            <button id="refreshNotifications" class="secondary" type="button">Refresh</button>
+                            <button id="markAllNotificationsRead" class="ghost dark-ghost" type="button">Mark All Read</button>
+                        </div>
+                    </div>
+                    <div class="card notification-page-card">
+                        <div id="notificationPageList" class="notification-list notification-page-list"></div>
                     </div>
                 </section>
 
