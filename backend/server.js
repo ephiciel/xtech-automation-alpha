@@ -2,6 +2,7 @@
 if (!isCloudflareWorker) require("dotenv").config();
 
 const express = require("express");
+const { randomUUID } = require("crypto");
 const path = require("path");
 const dns = require("dns").promises;
 const { initFirebase } = require("./firebase");
@@ -29,6 +30,12 @@ if (!isCloudflareWorker) {
 }
 
 const now = () => Timestamp.now();
+
+// The Cloudflare Firestore adapter requires an explicit string document ID.
+// Use UUIDs instead of calling collection.doc(newDocumentId()) without an argument.
+function newDocumentId() {
+    return randomUUID().replace(/-/g, "");
+}
 const num = value => {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
@@ -335,7 +342,7 @@ const notificationCollectionFor = uid => db.collection("users").doc(uid).collect
 
 function queueCustomerNotification(transaction, uid, details) {
     if (!uid) return;
-    const ref = notificationCollectionFor(uid).doc();
+    const ref = notificationCollectionFor(uid).doc(newDocumentId());
     transaction.set(ref, {
         notificationID: ref.id,
         type: String(details.type || "general"),
@@ -693,7 +700,7 @@ app.post("/api/auth/register-customer", async (req, res) => {
                 updatedAt: timestamp
             });
         } else {
-            customerRef = db.collection("customers").doc();
+            customerRef = db.collection("customers").doc(newDocumentId());
             await customerRef.set({
                 customerID: customerRef.id,
                 userUID: createdUser.uid,
@@ -987,7 +994,7 @@ app.post("/api/products", authRequired, roles("admin", "warehouse"), async (req,
         const batch = db.batch();
         batch.set(ref, product);
         if (quantity > 0) {
-            const auditRef = db.collection("inventoryTransactions").doc();
+            const auditRef = db.collection("inventoryTransactions").doc(newDocumentId());
             batch.set(auditRef, {
                 transactionID: auditRef.id,
                 productID,
@@ -1095,7 +1102,7 @@ async function stockChange(req, res, type) {
         }
 
         const productRef = db.collection("products").doc(productID);
-        const auditRef = db.collection("inventoryTransactions").doc();
+        const auditRef = db.collection("inventoryTransactions").doc(newDocumentId());
         const result = await db.runTransaction(async transaction => {
             const snap = await transaction.get(productRef);
             if (!snap.exists) throw new Error("Product not found.");
@@ -1185,7 +1192,7 @@ app.post("/api/customers", authRequired, roles("admin", "secretary"), async (req
         const duplicate = await db.collection("customers").where("email", "==", email).limit(1).get();
         if (!duplicate.empty) return res.status(409).json({ success: false, message: "A customer with this email already exists." });
 
-        const ref = db.collection("customers").doc();
+        const ref = db.collection("customers").doc(newDocumentId());
         const timestamp = now();
         const customer = {
             customerID: ref.id,
@@ -1357,7 +1364,7 @@ app.post("/api/pickups", authRequired, roles("admin", "secretary", "customer"), 
 
         // The pickup is written in the same transaction that checks inventory.
         // This makes the admin inventory the authoritative stock source and closes the stale-stock race window.
-        const ref = db.collection("pickups").doc();
+        const ref = db.collection("pickups").doc(newDocumentId());
         let pickup;
         await db.runTransaction(async transaction => {
             const productRefs = items.map(item => db.collection("products").doc(item.productID));
@@ -1461,7 +1468,7 @@ app.patch("/api/pickups/:id/status", authRequired, roles("admin", "secretary", "
                     if (item.quantity > previous) throw new Error(`Pickup cannot be completed. ${product.productName} has only ${previous} ${product.unit || "units"} in the admin inventory, but this pickup requires ${item.quantity}.`);
                     const next = previous - item.quantity;
                     transaction.update(productRefs[index], { quantity: next, updatedAt: timestamp });
-                    const auditRef = db.collection("inventoryTransactions").doc();
+                    const auditRef = db.collection("inventoryTransactions").doc(newDocumentId());
                     transaction.set(auditRef, {
                         transactionID: auditRef.id,
                         productID: product.productID,
@@ -1583,7 +1590,7 @@ app.post("/api/sales", authRequired, roles("admin", "secretary"), async (req, re
         }
 
         const customerUID = customerData?.userUID || null;
-        const saleRef = db.collection("sales").doc();
+        const saleRef = db.collection("sales").doc(newDocumentId());
         let sale;
         await db.runTransaction(async transaction => {
             const productRefs = items.map(item => db.collection("products").doc(item.productID));
@@ -1607,7 +1614,7 @@ app.post("/api/sales", authRequired, roles("admin", "secretary"), async (req, re
                 });
 
                 transaction.update(productRefs[index], { quantity: next, updatedAt: timestamp });
-                const auditRef = db.collection("inventoryTransactions").doc();
+                const auditRef = db.collection("inventoryTransactions").doc(newDocumentId());
                 transaction.set(auditRef, {
                     transactionID: auditRef.id,
                     productID: product.productID,
@@ -1994,8 +2001,8 @@ ${XTECH_MANUAL}`
         // Save the exchange under this Firebase user's UID only.
         const baseTime = Date.now();
         const batch = db.batch();
-        const userMessageRef = chatRef.doc();
-        const assistantMessageRef = chatRef.doc();
+        const userMessageRef = chatRef.doc(newDocumentId());
+        const assistantMessageRef = chatRef.doc(newDocumentId());
 
         batch.set(userMessageRef, {
             role: "user",
@@ -2077,4 +2084,5 @@ module.exports = { app, startServer };
 app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
+
 
