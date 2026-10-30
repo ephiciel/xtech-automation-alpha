@@ -1,9 +1,13 @@
-require("dotenv").config();
+const isCloudflareWorker = process.env.CLOUDFLARE_WORKER === "true";
+if (!isCloudflareWorker) require("dotenv").config();
 
 const express = require("express");
 const path = require("path");
 const dns = require("dns").promises;
-const { db, auth, Timestamp } = require("./firebase");
+const { initFirebase } = require("./firebase");
+let db;
+let auth;
+let Timestamp;
 const XTECH_MANUAL = require("./xtechManual");
 const {
     createOtpHash,
@@ -20,7 +24,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(path.join(__dirname, "../frontend")));
+if (!isCloudflareWorker) {
+    app.use(express.static(path.join(__dirname, "../frontend")));
+}
 
 const now = () => Timestamp.now();
 const num = value => {
@@ -115,6 +121,15 @@ function isValidEmailAddress(value) {
 
 const emailDomainCache = new Map();
 
+async function resolveDnsJson(domain, type) {
+    const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${encodeURIComponent(type)}`;
+    const response = await fetch(url, {
+        headers: { Accept: "application/dns-json" }
+    });
+    if (!response.ok) throw new Error(`DNS lookup failed with HTTP ${response.status}`);
+    return response.json();
+}
+
 async function emailDomainCanReceiveMail(value) {
     const email = normalizedEmail(value);
     if (!isValidEmailAddress(email)) return false;
@@ -124,22 +139,35 @@ async function emailDomainCanReceiveMail(value) {
 
     let valid = false;
     try {
-        const mx = await dns.resolveMx(domain);
-        valid = Array.isArray(mx) && mx.some(record => record && record.exchange);
-    } catch {
-        // RFC-compatible fallback: a mail domain can still resolve directly without an MX record.
-        try {
-            const addresses = await dns.resolve(domain);
-            valid = Array.isArray(addresses) && addresses.length > 0;
-        } catch (dnsError) {
-            const definitiveMissingDomain = ["ENOTFOUND", "ENODATA", "ENODOMAIN"].includes(dnsError.code);
-            if (definitiveMissingDomain) {
-                valid = false;
-            } else {
-                // Do not block legitimate users during a temporary DNS/network resolver outage.
-                console.warn(`Email-domain DNS check skipped for ${domain}: ${dnsError.code || dnsError.message}`);
-                valid = true;
+        if (isCloudflareWorker) {
+            const mx = await resolveDnsJson(domain, "MX");
+            valid = Array.isArray(mx?.Answer) && mx.Answer.length > 0;
+
+            if (!valid) {
+                const addressResult = await resolveDnsJson(domain, "A");
+                valid = Array.isArray(addressResult?.Answer) && addressResult.Answer.length > 0;
             }
+        } else {
+            const mx = await dns.resolveMx(domain);
+            valid = Array.isArray(mx) && mx.some(record => record && record.exchange);
+        }
+    } catch (error) {
+        if (!isCloudflareWorker) {
+            try {
+                const addresses = await dns.resolve(domain);
+                valid = Array.isArray(addresses) && addresses.length > 0;
+            } catch (dnsError) {
+                const definitiveMissingDomain = ["ENOTFOUND", "ENODATA", "ENODOMAIN"].includes(dnsError.code);
+                if (definitiveMissingDomain) {
+                    valid = false;
+                } else {
+                    console.warn(`Email-domain DNS check skipped for ${domain}: ${dnsError.code || dnsError.message}`);
+                    valid = true;
+                }
+            }
+        } else {
+            console.warn(`Email-domain DNS check skipped for ${domain}: ${error?.message || error}`);
+            valid = true;
         }
     }
 
@@ -1897,13 +1925,53 @@ ${XTECH_MANUAL}`
 });
 
 /* FRONTEND FALLBACK */
-app.get("/{*splat}", (req, res) => {
-    res.sendFile(path.join(__dirname, "../frontend/index.html"));
-});
+if (!isCloudflareWorker) {
+    app.get("/{*splat}", (req, res) => {
+        res.sendFile(path.join(__dirname, "../frontend/index.html"));
+    });
+}
 
-app.listen(PORT, "0.0.0.0", () => {
-    const publicUrl = String(process.env.APP_URL || "").trim();
-    console.log(`XTECH Automation listening on 0.0.0.0:${PORT}`);
-    if (publicUrl) console.log(`Public URL: ${publicUrl}`);
-    else console.log(`Local URL: http://localhost:${PORT}`);
-});
+let serverStarted = false;
+let serverStartPromise = null;
+
+async function startServer() {
+    if (serverStarted) return;
+    if (serverStartPromise) return serverStartPromise;
+
+    serverStartPromise = (async () => {
+        const services = await initFirebase();
+        db = services.db;
+        auth = services.auth;
+        Timestamp = services.Timestamp;
+
+        await new Promise((resolve, reject) => {
+            const onListening = () => {
+                serverStarted = true;
+                const publicUrl = String(process.env.APP_URL || "").trim();
+                console.log(`XTECH Automation listening on port ${PORT}`);
+                if (publicUrl) console.log(`Public URL: ${publicUrl}`);
+                else if (!isCloudflareWorker) console.log(`Local URL: http://localhost:${PORT}`);
+                resolve();
+            };
+
+            // Cloudflare Workers' Node HTTP integration supports app.listen(port)
+            // but not the Node host-binding form app.listen(port, "0.0.0.0").
+            const server = isCloudflareWorker
+                ? app.listen(PORT, onListening)
+                : app.listen(PORT, "0.0.0.0", onListening);
+
+            server.once("error", reject);
+        });
+    })();
+
+    return serverStartPromise;
+}
+
+if (require.main === module) {
+    startServer().catch(error => {
+        console.error("XTECH startup failed:", error?.message || error);
+        process.exit(1);
+    });
+}
+
+module.exports = { app, startServer };
