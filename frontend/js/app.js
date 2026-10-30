@@ -24,6 +24,7 @@ let lastNotificationUnreadCount = 0;
 let firebaseAppInstance = null;
 let firebaseAuthInstance = null;
 let firebaseAuthApi = null;
+let firebaseInitPromise = null;
 let selectedSignInMethod = "password-totp";
 let authFlowInProgress = false;
 let pendingMfaResolver = null;
@@ -544,15 +545,27 @@ async function loadFirebaseAuthApi() {
 
 // Loads the Firebase settings and starts Firebase Authentication
 async function initFirebase() {
-    appConfig = await api("/api/config", { silent: true });
-    if (!appConfig.apiKey || !appConfig.projectId || !appConfig.appId) {
-        throw new Error("Firebase web configuration is missing. Check FIREBASE_API_KEY, FIREBASE_PROJECT_ID, and FIREBASE_APP_ID in your deployment environment.");
-    }
+    if (firebaseAuthInstance && firebaseAuthApi) return firebaseAuthInstance;
+    if (firebaseInitPromise) return firebaseInitPromise;
 
-    const firebaseApi = await loadFirebaseAuthApi();
-    if (!firebaseAppInstance) firebaseAppInstance = firebaseApi.initializeApp(appConfig);
-    if (!firebaseAuthInstance) firebaseAuthInstance = firebaseApi.getAuth(firebaseAppInstance);
-    return firebaseAuthInstance;
+    firebaseInitPromise = (async () => {
+        appConfig = await api("/api/config", { silent: true });
+        if (!appConfig.apiKey || !appConfig.projectId || !appConfig.appId) {
+            throw new Error("Firebase web configuration is missing. Check FIREBASE_API_KEY, FIREBASE_PROJECT_ID, and FIREBASE_APP_ID in your deployment environment.");
+        }
+
+        const firebaseApi = await loadFirebaseAuthApi();
+        if (!firebaseAppInstance) firebaseAppInstance = firebaseApi.initializeApp(appConfig);
+        if (!firebaseAuthInstance) firebaseAuthInstance = firebaseApi.getAuth(firebaseAppInstance);
+        return firebaseAuthInstance;
+    })();
+
+    try {
+        return await firebaseInitPromise;
+    } catch (error) {
+        firebaseInitPromise = null;
+        throw error;
+    }
 }
 
 // Stores the email OTP screen state so a page refresh does not reset the resend countdown
@@ -1101,7 +1114,8 @@ $("loginForm").addEventListener("submit", async event => {
     try {
         const email = validateEmail($("loginEmail").value);
         const password = validateText($("loginPassword").value, "Password", 128, true);
-        const credential = await busy(event.submitter, () => firebaseAuthApi.signInWithEmailAndPassword(firebaseAuthInstance, email, password), "Signing In…");
+        const auth = await initFirebase();
+        const credential = await busy(event.submitter, () => firebaseAuthApi.signInWithEmailAndPassword(auth, email, password), "Signing In…");
 
         const factors = firebaseAuthApi.multiFactor(credential.user).enrolledFactors;
         const hasTotp = factors.some(factor => factor.factorId === firebaseAuthApi.TotpMultiFactorGenerator.FACTOR_ID);
@@ -1148,7 +1162,8 @@ $("emailOtpForm").addEventListener("submit", async event => {
             silent: true
         }), "Verifying…");
 
-        const credential = await firebaseAuthApi.signInWithCustomToken(firebaseAuthInstance, result.customToken);
+        const auth = await initFirebase();
+        const credential = await firebaseAuthApi.signInWithCustomToken(auth, result.customToken);
         const user = credential.user;
         clearEmailOtpSession();
         authFlowInProgress = false;
