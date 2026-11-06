@@ -10,7 +10,13 @@
     "CLOUDFLARE_WORKER": "true",
     "PORT": "3000",
     "XTECH_ENV": "staging",
-    "XTECH_STAGING_FIREBASE_PROJECT_ID": "xtech-automation-staging"
+    "XTECH_STAGING_FIREBASE_PROJECT_ID": "xtech-automation-staging",
+    "FIREBASE_API_KEY": "AIzaSyCB3sAdstuJEp9oDf0m2wzd4VVOPRAxqQ8",
+    "FIREBASE_AUTH_DOMAIN": "xtech-automation-staging.firebaseapp.com",
+    "FIREBASE_PROJECT_ID": "xtech-automation-staging",
+    "FIREBASE_STORAGE_BUCKET": "xtech-automation-staging.firebasestorage.app",
+    "FIREBASE_MESSAGING_SENDER_ID": "762551129014",
+    "FIREBASE_APP_ID": "1:762551129014:web:14ba82c22ab4d8708f6717"
   },
   "assets": {
     "directory": "./frontend",
