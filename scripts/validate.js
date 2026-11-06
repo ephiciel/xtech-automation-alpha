@@ -7,6 +7,7 @@ const files = [
   "backend/server.js",
   "backend/routes/customers.routes.js",
   "backend/routes/pickups.routes.js",
+  "backend/routes/sales.routes.js",
   "backend/routes/inventory.routes.js",
   "backend/routes/account-notification.routes.js",
   "backend/firebase.js",
@@ -31,7 +32,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -77,6 +78,19 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
 }
 
 const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+
+// Stage 4.4d3: preserve sales authorization, stock transactions and notifications.
+const salesRoutesJs = fs.readFileSync(path.join(root, "backend/routes/sales.routes.js"), "utf8");
+if (salesRoutesJs.includes('app.get("/api/sales"') &&
+    salesRoutesJs.includes('app.post("/api/sales"') &&
+    /registerSalesRoutes\(app/.test(serverJs) &&
+    salesRoutesJs.includes('roles("admin", "secretary")') &&
+    salesRoutesJs.includes("runTransaction") &&
+    salesRoutesJs.includes("SALE_OUT") &&
+    salesRoutesJs.includes("purchase_recorded")) {
+  pass("sales routes retain stock transaction auditing and purchase notifications");
+} else fail("sales route extraction incomplete");
+
 
 // Stage 4.4d2: pickup route extraction and inventory notification checks.
 const pickupRoutesJs = fs.readFileSync(path.join(root, "backend/routes/pickups.routes.js"), "utf8");
@@ -154,7 +168,7 @@ if (packageJson.dependencies?.["@ljoukov/firebase-admin-cloudflare"] && packageJ
   fail("package.json must include Worker-compatible Firestore and Wrangler");
 }
 
-if (/\/api\/notifications/.test(accountRoutesJs) && /registerAccountNotificationRoutes/.test(serverJs) && /purchase_recorded/.test(serverJs) && /pickup_approved/.test(pickupRoutesJs) && /pickup_completed/.test(pickupRoutesJs) && /loadNotifications/.test(appJs)) {
+if (/\/api\/notifications/.test(accountRoutesJs) && /registerAccountNotificationRoutes/.test(serverJs) && /purchase_recorded/.test(salesRoutesJs) && /pickup_approved/.test(pickupRoutesJs) && /pickup_completed/.test(pickupRoutesJs) && /loadNotifications/.test(appJs)) {
   pass("customer purchase and pickup notifications are configured");
 } else {
   fail("customer notification backend or frontend is missing");
