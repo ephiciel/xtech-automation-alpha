@@ -6,6 +6,7 @@ const { randomUUID } = require("crypto");
 const path = require("path");
 const dns = require("dns").promises;
 const { initFirebase } = require("./firebase");
+const { createAuthMiddleware } = require("./middleware/auth");
 const { normalizedEmail, isValidName, isValidEmailAddress, isValidOptionalText, isValidPassword, isValidProductID, isValidProductName, isValidCategory, isValidPositiveWholeNumber } = require("./utils/validators");
 const {
     serialize,
@@ -189,46 +190,11 @@ function normalizeItems(items) {
     return Array.from(totals, ([productID, quantity]) => ({ productID, quantity }));
 }
 
-async function authRequired(req, res, next) {
-    const authorization = req.headers.authorization || "";
-    if (!authorization.startsWith("Bearer ")) {
-        return res.status(401).json({ success: false, message: "Authentication required." });
-    }
-
-    const idToken = authorization.substring(7).trim();
-    if (!idToken) {
-        return res.status(401).json({ success: false, message: "Authentication token is missing." });
-    }
-
-    try {
-        const decodedToken = await auth.verifyIdToken(idToken, true);
-        req.user = decodedToken;
-
-        const userSnap = await db.collection("users").doc(decodedToken.uid).get();
-        req.profile = userSnap.exists
-            ? userSnap.data()
-            : { role: "customer", email: decodedToken.email || "", active: true };
-        req.profile = { ...req.profile, role: normalizedRole(req.profile.role) };
-
-        if (req.profile.active === false) {
-            return res.status(403).json({ success: false, message: "This account has been deactivated." });
-        }
-
-        next();
-    } catch (error) {
-        console.error("Firebase authentication error:", error.message);
-        return res.status(401).json({ success: false, message: "Invalid or expired authentication token." });
-    }
-}
-
-function roles(...allowed) {
-    return (req, res, next) => {
-        if (!allowed.includes(req.profile?.role)) {
-            return res.status(403).json({ success: false, message: "You do not have permission for this action." });
-        }
-        next();
-    };
-}
+const { authRequired, roles } = createAuthMiddleware({
+    getAuth: () => auth,
+    getDb: () => db,
+    normalizedRole
+});
 
 const notificationCollectionFor = uid => db.collection("users").doc(uid).collection("notifications");
 
