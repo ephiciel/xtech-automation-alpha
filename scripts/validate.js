@@ -5,6 +5,7 @@ const { execFileSync } = require("child_process");
 const root = path.join(__dirname, "..");
 const files = [
   "backend/server.js",
+  "backend/routes/customers.routes.js",
   "backend/routes/inventory.routes.js",
   "backend/routes/account-notification.routes.js",
   "backend/firebase.js",
@@ -29,7 +30,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -75,6 +76,17 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
 }
 
 const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+
+// Stage 4.4d1: verify customer route extraction and preserved access guards.
+const customerRoutesJs = fs.readFileSync(path.join(root, "backend/routes/customers.routes.js"), "utf8");
+const customerPaths = ["/api/customers", "/api/customers/:id",
+  "/api/customers/:id/status", "/api/customers/:id/history"];
+if (customerPaths.every(p => customerRoutesJs.includes(p)) &&
+    /registerCustomerRoutes\(app/.test(serverJs) &&
+    customerRoutesJs.includes('roles("admin", "secretary")')) {
+  pass("customer routes are modularized with original role permissions");
+} else fail("customer route extraction incomplete");
+
 // Stage 4.4c: verify extracted inventory routes remain wired to the API.
 const inventoryRoutesJs = fs.readFileSync(path.join(root, "backend/routes/inventory.routes.js"), "utf8");
 const requiredInventoryRoutePaths = [
