@@ -8,6 +8,7 @@ const files = [
   "backend/routes/customers.routes.js",
   "backend/routes/pickups.routes.js",
   "backend/routes/sales.routes.js",
+  "backend/routes/report-dashboard.routes.js",
   "backend/routes/inventory.routes.js",
   "backend/routes/account-notification.routes.js",
   "backend/firebase.js",
@@ -32,7 +33,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -78,6 +79,20 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
 }
 
 const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+
+// Stage 4.4e: retain reporting, CSV export and dashboard route security.
+const reportDashboardJs = fs.readFileSync(path.join(root, "backend/routes/report-dashboard.routes.js"), "utf8");
+if (reportDashboardJs.includes('app.get("/api/reports/summary"') &&
+    reportDashboardJs.includes('app.get("/api/reports/csv/:type"') &&
+    reportDashboardJs.includes('app.get("/api/dashboard"') &&
+    /registerReportDashboardRoutes\(app/.test(serverJs) &&
+    reportDashboardJs.includes('roles("admin")') &&
+    reportDashboardJs.includes('roles("admin", "secretary", "warehouse")') &&
+    reportDashboardJs.includes("res.setHeader") &&
+    reportDashboardJs.includes("weeklySales")) {
+  pass("report and dashboard routes retain access restrictions and CSV exports");
+} else fail("report/dashboard extraction incomplete");
+
 
 // Stage 4.4d3: preserve sales authorization, stock transactions and notifications.
 const salesRoutesJs = fs.readFileSync(path.join(root, "backend/routes/sales.routes.js"), "utf8");
