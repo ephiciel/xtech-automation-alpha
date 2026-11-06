@@ -11,8 +11,9 @@
   let collapsed = false;
   try {
     collapsed = localStorage.getItem(STORAGE_KEY) === "true";
-  } catch (_) {
-    // Private browsing/storage restrictions should not prevent navigation.
+  } catch {
+      // Storage may be unavailable in private browsing.
+      // Continue using the default sidebar setting.
   }
 
   sidebar.id = sidebar.id || "xtechSidebar";
@@ -65,8 +66,12 @@
   }
 
   button.addEventListener("click", () => {
-    collapsed = !collapsed;
-    try { localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch (_) {}
+      collapsed = !collapsed;
+      try {
+          localStorage.setItem(STORAGE_KEY, String(collapsed));
+      } catch {
+          // Ignore storage restrictions; the sidebar still works.
+      }
     update();
   });
 
