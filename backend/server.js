@@ -6,6 +6,7 @@ const { randomUUID } = require("crypto");
 const path = require("path");
 const dns = require("dns").promises;
 const { initFirebase } = require("./firebase");
+const { registerAccountNotificationRoutes } = require("./routes/account-notification.routes");
 const { registerSystemRoutes } = require("./routes/system.routes");
 const { createAuthMiddleware } = require("./middleware/auth");
 const { normalizedEmail, isValidName, isValidEmailAddress, isValidOptionalText, isValidPassword, isValidProductID, isValidProductName, isValidCategory, isValidPositiveWholeNumber } = require("./utils/validators");
@@ -217,59 +218,9 @@ function queueCustomerNotification(transaction, uid, details) {
 /* SYSTEM — see backend/routes/system.routes.js */
 registerSystemRoutes(app, { authRequired, roles, getDb: () => db, now });
 
-/* AUTH + ACCOUNT MANAGEMENT */
-app.get("/api/auth/me", authRequired, (req, res) => {
-    res.json({ success: true, user: serialize(req.user), profile: serialize(req.profile) });
-});
-
-
-/* CUSTOMER NOTIFICATIONS */
-app.get("/api/notifications", authRequired, roles("customer"), async (req, res) => {
-    try {
-        const snapshot = await notificationCollectionFor(req.user.uid)
-            .orderBy("createdAt", "desc")
-            .limit(100)
-            .get();
-        const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...serialize(doc.data()) }));
-        res.json({
-            success: true,
-            notifications,
-            unreadCount: notifications.filter(item => item.read !== true).length
-        });
-    } catch (error) {
-        console.error("Notification load error:", error?.message || error);
-        res.status(500).json({ success: false, message: "Unable to load notifications." });
-    }
-});
-
-app.patch("/api/notifications/read-all", authRequired, roles("customer"), async (req, res) => {
-    try {
-        const snapshot = await notificationCollectionFor(req.user.uid).get();
-        const timestamp = now();
-        const unreadDocs = snapshot.docs.filter(doc => doc.data().read !== true);
-        await Promise.all(unreadDocs.map(doc => doc.ref.update({ read: true, readAt: timestamp })));
-        res.json({ success: true, updated: unreadDocs.length });
-    } catch (error) {
-        console.error("Notification read-all error:", error?.message || error);
-        res.status(500).json({ success: false, message: "Unable to mark notifications as read." });
-    }
-});
-
-app.patch("/api/notifications/:id/read", authRequired, roles("customer"), async (req, res) => {
-    try {
-        const ref = notificationCollectionFor(req.user.uid).doc(req.params.id);
-        const snapshot = await ref.get();
-        if (!snapshot.exists) {
-            return res.status(404).json({ success: false, message: "Notification not found." });
-        }
-        if (snapshot.data().read !== true) {
-            await ref.update({ read: true, readAt: now() });
-        }
-        res.json({ success: true });
-    } catch (error) {
-        console.error("Notification read error:", error?.message || error);
-        res.status(500).json({ success: false, message: "Unable to update notification." });
-    }
+/* Account profile and customer notification routes (Stage 4.4b) */
+registerAccountNotificationRoutes(app, {
+    authRequired, roles, serialize, notificationCollectionFor, now
 });
 
 // Creates and emails a short-lived code for sign-in or registration verification

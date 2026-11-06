@@ -5,6 +5,7 @@ const { execFileSync } = require("child_process");
 const root = path.join(__dirname, "..");
 const files = [
   "backend/server.js",
+  "backend/routes/account-notification.routes.js",
   "backend/firebase.js",
   "backend/mailer.js",
   "backend/seed-admin.js",
@@ -27,7 +28,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -73,6 +74,7 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
 }
 
 const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+const accountRoutesJs = fs.readFileSync(path.join(root, "backend/routes/account-notification.routes.js"), "utf8");
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 if (/emailDomainCanReceiveMail/.test(serverJs) && /normalizePhilippineMobile/.test(serverJs) && /registrationPending/.test(serverJs) && /gmail\.comcom/.test(appJs)) {
   pass("V20 verified email and Philippine mobile validation are present");
@@ -115,7 +117,7 @@ if (packageJson.dependencies?.["@ljoukov/firebase-admin-cloudflare"] && packageJ
   fail("package.json must include Worker-compatible Firestore and Wrangler");
 }
 
-if (/\/api\/notifications/.test(serverJs) && /purchase_recorded/.test(serverJs) && /pickup_approved/.test(serverJs) && /pickup_completed/.test(serverJs) && /loadNotifications/.test(appJs)) {
+if (/\/api\/notifications/.test(accountRoutesJs) && /registerAccountNotificationRoutes/.test(serverJs) && /purchase_recorded/.test(serverJs) && /pickup_approved/.test(serverJs) && /pickup_completed/.test(serverJs) && /loadNotifications/.test(appJs)) {
   pass("customer purchase and pickup notifications are configured");
 } else {
   fail("customer notification backend or frontend is missing");
