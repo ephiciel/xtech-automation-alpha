@@ -120,9 +120,9 @@ if (userAccountRoutesJs.includes('app.get("/api/users"') &&
 
 // Stage 4.4e: retain reporting, CSV export and dashboard route security.
 const reportDashboardJs = fs.readFileSync(path.join(root, "backend/routes/report-dashboard.routes.js"), "utf8");
-if (reportDashboardJs.includes('app.get("/api/reports/summary"') &&
-    reportDashboardJs.includes('app.get("/api/reports/csv/:type"') &&
-    reportDashboardJs.includes('app.get("/api/dashboard"') &&
+if (/app\.get\(\s*"\/api\/reports\/summary"/.test(reportDashboardJs) &&
+    /app\.get\(\s*"\/api\/reports\/csv\/:type"/.test(reportDashboardJs) &&
+    /app\.get\(\s*"\/api\/dashboard"/.test(reportDashboardJs) &&
     /registerReportDashboardRoutes\(app/.test(combinedAuthAiSource) &&
     reportDashboardJs.includes('roles("admin")') &&
     reportDashboardJs.includes('roles("admin", "secretary", "warehouse")') &&

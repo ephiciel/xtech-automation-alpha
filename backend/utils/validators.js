@@ -3,9 +3,10 @@
 /** XTECH input validators: extracted from backend/server.js without changing validation rules. */
 
 function normalizedEmail(email) {
-    return String(email || "").trim().toLowerCase();
+    return String(email || "")
+        .trim()
+        .toLowerCase();
 }
-
 
 function hasOnlyAllowedNameCharacters(value) {
     return /^[\p{L}\p{M} .'-]+$/u.test(value);
@@ -13,10 +14,12 @@ function hasOnlyAllowedNameCharacters(value) {
 
 function isValidName(value) {
     const text = String(value || "").trim();
-    return text.length >= 2 &&
+    return (
+        text.length >= 2 &&
         text.length <= 80 &&
         /[\p{L}]/u.test(text) &&
-        hasOnlyAllowedNameCharacters(text);
+        hasOnlyAllowedNameCharacters(text)
+    );
 }
 
 function isValidEmailAddress(value) {
@@ -44,12 +47,13 @@ function isValidEmailAddress(value) {
     if (!/^[a-z]{2,24}$/i.test(tld)) return false;
 
     const commonEndings = ["com", "net", "org", "edu", "gov", "mil", "ph", "io", "co"];
-    const repeatedEnding = labels.length >= 3 &&
+    const repeatedEnding =
+        labels.length >= 3 &&
         labels.at(-1).toLowerCase() === labels.at(-2).toLowerCase() &&
         commonEndings.includes(tld);
 
     // Catch common typing mistakes such as gmail.comcom, gmail.netnet, and gmail.phph.
-    const concatenatedEnding = commonEndings.some(ending => tld === ending + ending);
+    const concatenatedEnding = commonEndings.some((ending) => tld === ending + ending);
 
     return !repeatedEnding && !concatenatedEnding;
 }
@@ -80,7 +84,9 @@ function isValidProductName(value) {
 }
 
 function isValidCategory(value) {
-    return ["Industrial Chemical", "Janitorial Chemical", "Cleaning Supply", "Other"].includes(String(value || "").trim());
+    return ["Industrial Chemical", "Janitorial Chemical", "Cleaning Supply", "Other"].includes(
+        String(value || "").trim()
+    );
 }
 
 function isValidPositiveWholeNumber(value, max = 1000000) {

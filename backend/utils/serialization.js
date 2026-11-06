@@ -1,4 +1,3 @@
-
 /**
  * Converts Firestore timestamps and nested objects
  * into values suitable for JSON API responses.
@@ -17,10 +16,7 @@ function serialize(value) {
 
     if (value && typeof value === "object") {
         return Object.fromEntries(
-            Object.entries(value).map(([key, item]) => [
-                key,
-                serialize(item)
-            ])
+            Object.entries(value).map(([key, item]) => [key, serialize(item)])
         );
     }
 
@@ -53,14 +49,14 @@ function operationalSale(value) {
     delete data.total;
 
     data.items = Array.isArray(data.items)
-        ? data.items.map(item => {
-            const clean = { ...item };
+        ? data.items.map((item) => {
+              const clean = { ...item };
 
-            delete clean.unitPrice;
-            delete clean.lineTotal;
+              delete clean.unitPrice;
+              delete clean.lineTotal;
 
-            return clean;
-        })
+              return clean;
+          })
         : [];
 
     return data;
