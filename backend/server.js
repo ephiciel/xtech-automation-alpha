@@ -144,7 +144,7 @@ async function emailDomainCanReceiveMail(value) {
     const cached = emailDomainCache.get(domain);
     if (cached && cached.expiresAt > Date.now()) return cached.valid;
 
-    let valid = false;
+    let valid;
     try {
         if (isCloudflareWorker) {
             const mx = await resolveDnsJson(domain, "MX");
@@ -198,10 +198,6 @@ function normalizePhilippineMobile(value) {
     if (["123456789", "987654321", "000000000"].includes(subscriber)) return null;
 
     return normalized;
-}
-
-function isValidPhone(value) {
-    return normalizePhilippineMobile(value) !== null;
 }
 
 function isValidOptionalText(value, maxLength) {
@@ -738,14 +734,37 @@ app.post("/api/auth/register-customer", async (req, res) => {
     } catch (error) {
         console.error("Customer registration error:", error.message);
         if (createdUser) {
-            try { await auth.deleteUser(createdUser.uid); } catch {}
-            try { await db.collection("users").doc(createdUser.uid).delete(); } catch {}
+            try {
+                await auth.deleteUser(createdUser.uid);
+            } catch (cleanupError) {
+                console.error(
+                    "Registration cleanup: Failed to delete Firebase Auth user:",
+                    cleanupError.code || cleanupError.message
+                );
+            }
+
+            try {
+                await db.collection("users").doc(createdUser.uid).delete();
+            } catch (cleanupError) {
+                console.error(
+                    "Registration cleanup: Failed to delete Firestore user:",
+                    cleanupError.code || cleanupError.message
+                );
+            }
         }
         if (customerRef) {
             try {
-                if (linkedExistingCustomer && previousCustomerData) await customerRef.set(previousCustomerData);
-                else await customerRef.delete();
-            } catch {}
+                if (linkedExistingCustomer && previousCustomerData) {
+                    await customerRef.set(previousCustomerData);
+                } else {
+                    await customerRef.delete();
+                }
+            } catch (cleanupError) {
+                console.error(
+                    "Registration cleanup: Failed to restore customer record:",
+                    cleanupError.code || cleanupError.message
+                );
+            }
         }
         if (error.status === 429) {
             return res.status(429).json({ success: false, message: error.message, retryAfterSeconds: error.retryAfterSeconds });
@@ -873,7 +892,14 @@ app.post("/api/users", authRequired, roles("admin"), async (req, res) => {
     } catch (error) {
         console.error(error);
         if (userRecord) {
-            try { await auth.deleteUser(userRecord.uid); } catch {}
+            try {
+                await auth.deleteUser(userRecord.uid);
+            } catch (cleanupError) {
+                console.error(
+                    "Staff account cleanup: Failed to delete Firebase Auth user:",
+                    cleanupError.code || cleanupError.message
+                );
+            }
         }
         const message = error.code === "auth/email-already-exists"
             ? "An account with this email already exists."
