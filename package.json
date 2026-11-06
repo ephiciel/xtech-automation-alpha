@@ -19,7 +19,9 @@
     "test:unit": "node --test tests/serialization.test.js tests/validators.test.js tests/auth-middleware.test.js tests/system-routes.test.js tests/account-notification-routes.test.js tests/inventory-routes.test.js tests/customers-routes.test.js tests/pickups-routes.test.js tests/sales-routes.test.js tests/report-dashboard-routes.test.js tests/user-accounts-routes.test.js tests/customer-profile-routes.test.js tests/email-otp-routes.test.js tests/customer-registration-routes.test.js tests/ai-assistant-routes.test.js",
     "test:integration": "node --test tests/integration-auth-flow.test.js tests/integration-http-smoke.test.js",
     "test:staging-preflight": "node --test tests/staging-preflight.test.js",
-    "preflight:staging": "node scripts/staging-preflight.js --audit"
+    "preflight:staging": "node scripts/staging-preflight.js --audit",
+    "test:staging-isolation": "node --test tests/staging-firebase-project.test.js tests/staging-isolation-check.test.js",
+    "preflight:staging:isolated": "node scripts/staging-isolation-check.js --strict"
   },
   "dependencies": {
     "@google/genai": "^2.23.0",

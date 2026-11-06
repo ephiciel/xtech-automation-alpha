@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "xtech-api-staging",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-10-30",
+  "workers_dev": true,
+  "routes": [],
+  "upload_source_maps": false,
+  "vars": {
+    "CLOUDFLARE_WORKER": "true",
+    "PORT": "3000",
+    "XTECH_ENV": "staging",
+    "XTECH_STAGING_FIREBASE_PROJECT_ID": "SET_ME_TO_SEPARATE_STAGING_FIREBASE_PROJECT_ID"
+  },
+  "assets": {
+    "directory": "./frontend",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api", "/api/*"]
+  }
+}

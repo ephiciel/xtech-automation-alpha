@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { assertFirebaseProject } = require("./utils/firebase-project");
 const {
     initializeApp: initializeAdminApp,
     cert,
@@ -57,11 +58,7 @@ function loadServiceAccount() {
         throw new Error("Firebase service account is missing project_id.");
     }
 
-    if (serviceAccount.project_id !== "xtech-automation") {
-        throw new Error(
-            `Wrong Firebase project. Expected xtech-automation but got ${serviceAccount.project_id}`
-        );
-    }
+    assertFirebaseProject(serviceAccount.project_id, process.env);
 
     return serviceAccount;
 }
