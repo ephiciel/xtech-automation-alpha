@@ -10,6 +10,7 @@ const files = [
   "backend/routes/sales.routes.js",
   "backend/routes/report-dashboard.routes.js",
   "backend/routes/user-accounts.routes.js",
+  "backend/routes/customer-profile.routes.js",
   "backend/routes/inventory.routes.js",
   "backend/routes/account-notification.routes.js",
   "backend/firebase.js",
@@ -34,7 +35,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -80,6 +81,18 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
 }
 
 const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+
+// Stage 4.4f2: customer profile retrieval and editing stay customer-only.
+const customerProfileRoutesJs = fs.readFileSync(path.join(root, "backend/routes/customer-profile.routes.js"), "utf8");
+if (customerProfileRoutesJs.includes('app.get("/api/profile"') &&
+    customerProfileRoutesJs.includes('app.put("/api/profile"') &&
+    /registerCustomerProfileRoutes\(app/.test(serverJs) &&
+    (customerProfileRoutesJs.match(/roles\("customer"\)/g) || []).length === 2 &&
+    customerProfileRoutesJs.includes("auth.updateUser") &&
+    customerProfileRoutesJs.includes('where("userUID", "==", req.user.uid)')) {
+  pass("customer profile routes retain customer-only access and Firebase synchronization");
+} else fail("customer profile route extraction incomplete");
+
 
 // Stage 4.4f1: user account handlers retain their admin-only authorization.
 const userAccountRoutesJs = fs.readFileSync(path.join(root, "backend/routes/user-accounts.routes.js"), "utf8");
