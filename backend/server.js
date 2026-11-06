@@ -6,6 +6,11 @@ const { randomUUID } = require("crypto");
 const path = require("path");
 const dns = require("dns").promises;
 const { initFirebase } = require("./firebase");
+const {
+    serialize,
+    operationalProduct,
+    operationalSale
+} = require("./utils/serialization");
 let db;
 let auth;
 let Timestamp;
@@ -40,35 +45,6 @@ const num = value => {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
 };
-
-function serialize(value) {
-    if (value && typeof value.toDate === "function") return value.toDate().toISOString();
-    if (Array.isArray(value)) return value.map(serialize);
-    if (value && typeof value === "object") {
-        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, serialize(item)]));
-    }
-    return value;
-}
-
-// Removes legacy monetary fields from older records before they are returned by the API.
-function operationalProduct(value) {
-    const data = serialize(value);
-    if (data && typeof data === "object") delete data.price;
-    return data;
-}
-
-function operationalSale(value) {
-    const data = serialize(value);
-    if (!data || typeof data !== "object") return data;
-    delete data.total;
-    data.items = Array.isArray(data.items) ? data.items.map(item => {
-        const clean = { ...item };
-        delete clean.unitPrice;
-        delete clean.lineTotal;
-        return clean;
-    }) : [];
-    return data;
-}
 
 function normalizedRole(role) {
     return role === "owner" ? "admin" : (role || "customer");
