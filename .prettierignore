@@ -1,0 +1,13 @@
+
+node_modules/
+.wrangler/
+coverage/
+dist/
+package-lock.json
+*.min.js
+*.bak
+backend/serviceAccountKey.json
+.env
+.env.*
+.dev.vars
+.dev.vars.*

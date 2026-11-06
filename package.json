@@ -13,7 +13,9 @@
     "cleanup:v18": "node scripts/cleanup-v18-data.js",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy",
-    "cf:whoami": "wrangler whoami"
+    "cf:whoami": "wrangler whoami",
+    "lint": "eslint backend frontend/js scripts worker",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@google/genai": "^2.23.0",
@@ -24,6 +26,10 @@
     "firebase-admin": "^14.3.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
     "wrangler": "^4.156.0"
   }
 }

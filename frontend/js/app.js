@@ -1591,9 +1591,9 @@ function openCustomerActionMenu(customerID, anchor = null, point = null) {
         const action = button.dataset.action;
         closeCustomerActionMenu();
 
-        if (action === "edit") editCustomer(customerID);
-        if (action === "history") customerHistory(customerID);
-        if (action === "status") setCustomerStatus(customerID, !active);
+        if (action === "edit") window.editCustomer(customerID);
+        if (action === "history") window.customerHistory(customerID);
+        if (action === "status") window.setCustomerStatus(customerID, !active);
     });
 }
 
