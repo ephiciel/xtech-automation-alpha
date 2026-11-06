@@ -5,6 +5,7 @@ const { execFileSync } = require("child_process");
 const root = path.join(__dirname, "..");
 const files = [
   "backend/server.js",
+  "backend/routes/inventory.routes.js",
   "backend/routes/account-notification.routes.js",
   "backend/firebase.js",
   "backend/mailer.js",
@@ -28,7 +29,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -74,6 +75,18 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
 }
 
 const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+// Stage 4.4c: verify extracted inventory routes remain wired to the API.
+const inventoryRoutesJs = fs.readFileSync(path.join(root, "backend/routes/inventory.routes.js"), "utf8");
+const requiredInventoryRoutePaths = [
+  "/api/products", "/api/products/archived", "/api/products/:productID",
+  "/api/products/:productID/archive", "/api/products/:productID/restore",
+  "/api/inventory/stock-in", "/api/inventory/stock-out", "/api/inventory/transactions"
+];
+if (requiredInventoryRoutePaths.every(p => inventoryRoutesJs.includes(p)) &&
+    /registerInventoryRoutes\(app/.test(serverJs) && inventoryRoutesJs.includes("db.runTransaction(")) {
+  pass("inventory routes are modularized with stock transaction logic retained");
+} else fail("inventory route extraction incomplete");
+
 const accountRoutesJs = fs.readFileSync(path.join(root, "backend/routes/account-notification.routes.js"), "utf8");
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 if (/emailDomainCanReceiveMail/.test(serverJs) && /normalizePhilippineMobile/.test(serverJs) && /registrationPending/.test(serverJs) && /gmail\.comcom/.test(appJs)) {
