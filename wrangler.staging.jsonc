@@ -10,7 +10,7 @@
     "CLOUDFLARE_WORKER": "true",
     "PORT": "3000",
     "XTECH_ENV": "staging",
-    "XTECH_STAGING_FIREBASE_PROJECT_ID": "SET_ME_TO_SEPARATE_STAGING_FIREBASE_PROJECT_ID"
+    "XTECH_STAGING_FIREBASE_PROJECT_ID": "xtech-automation-staging"
   },
   "assets": {
     "directory": "./frontend",
