@@ -6,9 +6,9 @@ const { randomUUID } = require("crypto");
 const path = require("path");
 const dns = require("dns").promises;
 const { initFirebase } = require("./firebase");
-const {registerEmailOtpRoutes}=require("./routes/email-otp.routes");
-const {registerCustomerRegistrationRoutes}=require("./routes/customer-registration.routes");
-const {registerAiAssistantRoutes}=require("./routes/ai-assistant.routes");
+const { registerEmailOtpRoutes } = require("./routes/email-otp.routes");
+const { registerCustomerRegistrationRoutes } = require("./routes/customer-registration.routes");
+const { registerAiAssistantRoutes } = require("./routes/ai-assistant.routes");
 const { registerCustomerProfileRoutes } = require("./routes/customer-profile.routes");
 const { registerUserAccountRoutes } = require("./routes/user-accounts.routes");
 const { registerReportDashboardRoutes } = require("./routes/report-dashboard.routes");
@@ -19,12 +19,18 @@ const { registerInventoryRoutes } = require("./routes/inventory.routes");
 const { registerAccountNotificationRoutes } = require("./routes/account-notification.routes");
 const { registerSystemRoutes } = require("./routes/system.routes");
 const { createAuthMiddleware } = require("./middleware/auth");
-const { normalizedEmail, isValidName, isValidEmailAddress, isValidOptionalText, isValidPassword, isValidProductID, isValidProductName, isValidCategory, isValidPositiveWholeNumber } = require("./utils/validators");
 const {
-    serialize,
-    operationalProduct,
-    operationalSale
-} = require("./utils/serialization");
+    normalizedEmail,
+    isValidName,
+    isValidEmailAddress,
+    isValidOptionalText,
+    isValidPassword,
+    isValidProductID,
+    isValidProductName,
+    isValidCategory,
+    isValidPositiveWholeNumber
+} = require("./utils/validators");
+const { serialize, operationalProduct, operationalSale } = require("./utils/serialization");
 let db;
 let auth;
 let Timestamp;
@@ -55,13 +61,13 @@ const now = () => Timestamp.now();
 function newDocumentId() {
     return randomUUID().replace(/-/g, "");
 }
-const num = value => {
+const num = (value) => {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
 };
 
 function normalizedRole(role) {
-    return role === "owner" ? "admin" : (role || "customer");
+    return role === "owner" ? "admin" : role || "customer";
 }
 
 const emailDomainCache = new Map();
@@ -94,7 +100,7 @@ async function emailDomainCanReceiveMail(value) {
             }
         } else {
             const mx = await dns.resolveMx(domain);
-            valid = Array.isArray(mx) && mx.some(record => record && record.exchange);
+            valid = Array.isArray(mx) && mx.some((record) => record && record.exchange);
         }
     } catch (error) {
         if (!isCloudflareWorker) {
@@ -102,21 +108,27 @@ async function emailDomainCanReceiveMail(value) {
                 const addresses = await dns.resolve(domain);
                 valid = Array.isArray(addresses) && addresses.length > 0;
             } catch (dnsError) {
-                const definitiveMissingDomain = ["ENOTFOUND", "ENODATA", "ENODOMAIN"].includes(dnsError.code);
+                const definitiveMissingDomain = ["ENOTFOUND", "ENODATA", "ENODOMAIN"].includes(
+                    dnsError.code
+                );
                 if (definitiveMissingDomain) {
                     valid = false;
                 } else {
-                    console.warn(`Email-domain DNS check skipped for ${domain}: ${dnsError.code || dnsError.message}`);
+                    console.warn(
+                        `Email-domain DNS check skipped for ${domain}: ${dnsError.code || dnsError.message}`
+                    );
                     valid = true;
                 }
             }
         } else {
-            console.warn(`Email-domain DNS check skipped for ${domain}: ${error?.message || error}`);
+            console.warn(
+                `Email-domain DNS check skipped for ${domain}: ${error?.message || error}`
+            );
             valid = true;
         }
     }
 
-    emailDomainCache.set(domain, { valid, expiresAt: Date.now() + (10 * 60 * 1000) });
+    emailDomainCache.set(domain, { valid, expiresAt: Date.now() + 10 * 60 * 1000 });
     return valid;
 }
 
@@ -165,7 +177,7 @@ function datePart(value) {
 function parseRange(req) {
     const start = String(req.query.start || "").trim();
     const end = String(req.query.end || "").trim();
-    const valid = value => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+    const valid = (value) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
     if (!valid(start) || !valid(end)) {
         const error = new Error("Report dates must use YYYY-MM-DD format.");
         error.status = 400;
@@ -195,7 +207,9 @@ function normalizeItems(items) {
         const productID = String(item?.productID || "").trim();
         const quantity = num(item?.quantity);
         if (!productID || !isValidPositiveWholeNumber(quantity)) {
-            throw new Error("Every item must have a Product ID and a positive whole-number quantity no greater than 1,000,000.");
+            throw new Error(
+                "Every item must have a Product ID and a positive whole-number quantity no greater than 1,000,000."
+            );
         }
         totals.set(productID, (totals.get(productID) || 0) + quantity);
     }
@@ -208,7 +222,8 @@ const { authRequired, roles } = createAuthMiddleware({
     normalizedRole
 });
 
-const notificationCollectionFor = uid => db.collection("users").doc(uid).collection("notifications");
+const notificationCollectionFor = (uid) =>
+    db.collection("users").doc(uid).collection("notifications");
 
 function queueCustomerNotification(transaction, uid, details) {
     if (!uid) return;
@@ -230,74 +245,164 @@ registerSystemRoutes(app, { authRequired, roles, getDb: () => db, now });
 
 /* Account profile and customer notification routes (Stage 4.4b) */
 registerAccountNotificationRoutes(app, {
-    authRequired, roles, serialize, notificationCollectionFor, now
+    authRequired,
+    roles,
+    serialize,
+    notificationCollectionFor,
+    now
 });
 
 /* EMAIL OTP (Stage 4.4f4) */
-const issueEmailOtp=registerEmailOtpRoutes(app,{
-  getDb:()=>db,getAuth:()=>auth,getTimestamp:()=>Timestamp,now,
-  normalizedEmail,isValidEmailAddress,createOtpHash,emailChallengeId,generateOtpCode,
-  maskEmail,otpExpiryMinutes,otpResendSeconds,sendOtpEmail,verifyOtpHash
+const issueEmailOtp = registerEmailOtpRoutes(app, {
+    getDb: () => db,
+    getAuth: () => auth,
+    getTimestamp: () => Timestamp,
+    now,
+    normalizedEmail,
+    isValidEmailAddress,
+    createOtpHash,
+    emailChallengeId,
+    generateOtpCode,
+    maskEmail,
+    otpExpiryMinutes,
+    otpResendSeconds,
+    sendOtpEmail,
+    verifyOtpHash
 });
 
 /* CUSTOMER REGISTRATION (Stage 4.4f3) */
-registerCustomerRegistrationRoutes(app,{
-  getDb:()=>db,getAuth:()=>auth,now,newDocumentId,normalizedEmail,normalizePhilippineMobile,
-  isValidName,isValidEmailAddress,emailDomainCanReceiveMail,isValidOptionalText,isValidPassword,issueEmailOtp
+registerCustomerRegistrationRoutes(app, {
+    getDb: () => db,
+    getAuth: () => auth,
+    now,
+    newDocumentId,
+    normalizedEmail,
+    normalizePhilippineMobile,
+    isValidName,
+    isValidEmailAddress,
+    emailDomainCanReceiveMail,
+    isValidOptionalText,
+    isValidPassword,
+    issueEmailOtp
 });
 
 /* CUSTOMER PROFILE (Stage 4.4f2) */
 registerCustomerProfileRoutes(app, {
-    authRequired, roles, getDb: () => db, getAuth: () => auth,
-    now, serialize, normalizePhilippineMobile, isValidName, isValidOptionalText
+    authRequired,
+    roles,
+    getDb: () => db,
+    getAuth: () => auth,
+    now,
+    serialize,
+    normalizePhilippineMobile,
+    isValidName,
+    isValidOptionalText
 });
 
 /* ADMIN USER ACCOUNT MANAGEMENT (Stage 4.4f1) */
 registerUserAccountRoutes(app, {
-    authRequired, roles, getDb: () => db, getAuth: () => auth,
-    now, serialize, normalizedRole, normalizedEmail,
-    isValidName, isValidEmailAddress, emailDomainCanReceiveMail, isValidPassword
+    authRequired,
+    roles,
+    getDb: () => db,
+    getAuth: () => auth,
+    now,
+    serialize,
+    normalizedRole,
+    normalizedEmail,
+    isValidName,
+    isValidEmailAddress,
+    emailDomainCanReceiveMail,
+    isValidPassword
 });
 
 /* PRODUCTS / INVENTORY (extracted in Stage 4.4c) */
 registerInventoryRoutes(app, {
-    authRequired, roles, getDb: () => db, now, num, serialize,
-    operationalProduct, newDocumentId, isValidProductID,
-    isValidProductName, isValidCategory, isValidOptionalText,
+    authRequired,
+    roles,
+    getDb: () => db,
+    now,
+    num,
+    serialize,
+    operationalProduct,
+    newDocumentId,
+    isValidProductID,
+    isValidProductName,
+    isValidCategory,
+    isValidOptionalText,
     isValidPositiveWholeNumber
 });
 
 /* CUSTOMERS (extracted in Stage 4.4d1) */
 registerCustomerRoutes(app, {
-    authRequired, roles, getDb: () => db, getAuth: () => auth,
-    serialize, operationalSale, normalizedEmail, normalizePhilippineMobile,
-    isValidName, isValidEmailAddress, emailDomainCanReceiveMail,
-    isValidOptionalText, newDocumentId, now
+    authRequired,
+    roles,
+    getDb: () => db,
+    getAuth: () => auth,
+    serialize,
+    operationalSale,
+    normalizedEmail,
+    normalizePhilippineMobile,
+    isValidName,
+    isValidEmailAddress,
+    emailDomainCanReceiveMail,
+    isValidOptionalText,
+    newDocumentId,
+    now
 });
 
 /* PICKUPS (extracted in Stage 4.4d2) */
 registerPickupRoutes(app, {
-    authRequired, roles, getDb: () => db, serialize, normalizeItems,
-    isValidDateYMD, dateYMD, isValidOptionalText, newDocumentId,
-    now, num, queueCustomerNotification
+    authRequired,
+    roles,
+    getDb: () => db,
+    serialize,
+    normalizeItems,
+    isValidDateYMD,
+    dateYMD,
+    isValidOptionalText,
+    newDocumentId,
+    now,
+    num,
+    queueCustomerNotification
 });
 
 /* SALES (extracted in Stage 4.4d3) */
 registerSalesRoutes(app, {
-    authRequired, roles, getDb: () => db, operationalSale, normalizeItems,
-    isValidOptionalText, newDocumentId, now, num, queueCustomerNotification
+    authRequired,
+    roles,
+    getDb: () => db,
+    operationalSale,
+    normalizeItems,
+    isValidOptionalText,
+    newDocumentId,
+    now,
+    num,
+    queueCustomerNotification
 });
 
 /* REPORTS + DASHBOARD (extracted in Stage 4.4e) */
 registerReportDashboardRoutes(app, {
-    authRequired, roles, getDb: () => db,
-    operationalProduct, operationalSale, serialize,
-    parseRange, inRange, dateYMD, datePart, num
+    authRequired,
+    roles,
+    getDb: () => db,
+    operationalProduct,
+    operationalSale,
+    serialize,
+    parseRange,
+    inRange,
+    dateYMD,
+    datePart,
+    num
 });
 
 /* HELP ASSISTANT (Stage 4.4g) */
-registerAiAssistantRoutes(app,{
-  getDb:()=>db,getTimestamp:()=>Timestamp,authRequired,serialize,newDocumentId,XTECH_MANUAL
+registerAiAssistantRoutes(app, {
+    getDb: () => db,
+    getTimestamp: () => Timestamp,
+    authRequired,
+    serialize,
+    newDocumentId,
+    XTECH_MANUAL
 });
 
 /* FRONTEND FALLBACK */
@@ -344,7 +449,7 @@ async function startServer() {
 }
 
 if (require.main === module) {
-    startServer().catch(error => {
+    startServer().catch((error) => {
         console.error("XTECH startup failed:", error?.message || error);
         process.exit(1);
     });
@@ -355,5 +460,3 @@ module.exports = { app, startServer };
 app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
-
-

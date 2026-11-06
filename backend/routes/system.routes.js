@@ -7,16 +7,27 @@
  * because the Firestore connection is initialized by startServer().
  */
 function registerSystemRoutes(app, { authRequired, roles, getDb, now }) {
-    if (!app || typeof app.get !== "function" ||
-        typeof authRequired !== "function" || typeof roles !== "function" ||
-        typeof getDb !== "function" || typeof now !== "function") {
-        throw new TypeError("System routes require app, authorization, Firebase and clock dependencies.");
+    if (
+        !app ||
+        typeof app.get !== "function" ||
+        typeof authRequired !== "function" ||
+        typeof roles !== "function" ||
+        typeof getDb !== "function" ||
+        typeof now !== "function"
+    ) {
+        throw new TypeError(
+            "System routes require app, authorization, Firebase and clock dependencies."
+        );
     }
 
     app.get("/api/status", (req, res) => {
-        res.json({ success: true, message: "XTECH Automation server is connected.", timestamp: new Date().toISOString() });
+        res.json({
+            success: true,
+            message: "XTECH Automation server is connected.",
+            timestamp: new Date().toISOString()
+        });
     });
-    
+
     app.get("/api/config", (req, res) => {
         res.json({
             apiKey: process.env.FIREBASE_API_KEY || "",
@@ -29,7 +40,7 @@ function registerSystemRoutes(app, { authRequired, roles, getDb, now }) {
             adminMfaBypass: process.env.ADMIN_MFA_BYPASS === "true"
         });
     });
-    
+
     app.get("/api/firebase-test", authRequired, roles("admin"), async (req, res) => {
         try {
             await getDb().collection("test").doc("connection").set({
