@@ -202,7 +202,12 @@ function normalizePhilippineMobile(value) {
 
 function isValidOptionalText(value, maxLength) {
     const text = String(value || "").trim();
-    return text.length <= maxLength && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text);
+
+    // Reject prohibited ASCII control characters.
+    // eslint-disable-next-line no-control-regex
+    const hasControlCharacters = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text);
+
+    return text.length <= maxLength && !hasControlCharacters;
 }
 
 function isValidPassword(value) {
