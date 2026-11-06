@@ -17,7 +17,9 @@ function inspect(config, requestedProjectId, paths = {}) {
   if (!name || name === "xtech-api" || !/staging/.test(name)) block("WORKER_NAME", "Select a clearly distinct staging Worker name.");
   if (config?.workers_dev !== true) block("WORKERS_DEV", "Staging must use an explicit workers.dev endpoint.");
   if (config?.route || routes.length || config?.custom_domain) block("NO_CUSTOM_ROUTES", "Staging must not use any custom domain or route.");
-  if (config?.main !== "worker/index.mjs") block("ENTRYPOINT", "Expected the standalone direct Worker entrypoint worker/index.mjs.");
+  if (config?.main !== "worker/production.mjs") {
+    block("ENTRYPOINT", "Expected the verified staging entrypoint worker/production.mjs.");
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(config?.compatibility_date || "")) || config.compatibility_date < "2026-08-04") {
     block("COMPATIBILITY", "Set a compatibility date supporting Node.js APIs (2026-08-04 or later).");
   }
