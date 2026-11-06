@@ -36,5 +36,14 @@
   },
   "observability": {
     "enabled": true
+  },
+  "previews": {
+    "vars": {
+      "CLOUDFLARE_WORKER": "true",
+      "PORT": "3000",
+      "XTECH_ENV": "staging",
+      "XTECH_STAGING_FIREBASE_PROJECT_ID": "xtech-automation-staging",
+      "FIREBASE_PROJECT_ID": "xtech-automation-staging"
+    }
   }
 }

@@ -97,14 +97,18 @@ async function sendOtpEmail(email, code, purpose = "signin") {
     });
 
     if (!response.ok) {
-        let details = "";
+        let details;
+
         try {
             const body = await response.json();
             details = body?.message || body?.name || JSON.stringify(body);
         } catch {
             details = await response.text().catch(() => "");
         }
-        throw new Error(`Resend email delivery failed (${response.status})${details ? `: ${details}` : "."}`);
+
+        throw new Error(
+            `Resend email delivery failed (${response.status})${details ? `: ${details}` : "."}`
+        );
     }
 
     return response.json();

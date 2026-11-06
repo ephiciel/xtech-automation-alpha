@@ -269,7 +269,12 @@ async function api(url, opts = {}) {
     try {
         const response = await fetch(url, opts);
         let data = {};
-        try { data = await response.json(); } catch {}
+
+        try {
+            data = await response.json();
+        } catch {
+            // Empty or non-JSON responses use the default empty object.
+        }
         if (!response.ok) {
             const error = new Error(data.message || `Request failed (${response.status})`);
             error.status = response.status;
@@ -578,7 +583,7 @@ function saveEmailOtpSession() {
             resendAvailableAt: emailOtpResendAvailableAt,
             expiresAt: emailOtpExpiresAt
         }));
-    } catch (error) {
+    } catch {
         // The backend still enforces the cooldown if browser storage is unavailable.
     }
 }
@@ -600,7 +605,7 @@ function clearEmailOtpSession() {
     emailOtpExpiresAt = 0;
     try {
         sessionStorage.removeItem(EMAIL_OTP_SESSION_KEY);
-    } catch (error) {
+    } catch {
         // Ignores storage errors when session storage is unavailable.
     }
 
@@ -642,10 +647,10 @@ function startEmailOtpCountdown() {
 
 // Restores an unfinished email OTP sign-in after the page is refreshed
 function restoreEmailOtpSession() {
-    let saved = null;
+    let saved;
     try {
         saved = JSON.parse(sessionStorage.getItem(EMAIL_OTP_SESSION_KEY) || "null");
-    } catch (error) {
+    } catch {
         saved = null;
     }
 
@@ -743,7 +748,7 @@ function applyTheme(themeName = "light") {
 
     try {
         localStorage.setItem("xtech-theme", darkMode ? "dark" : "light");
-    } catch (error) {
+    } catch {
         // Ignores storage errors if the browser blocks local storage.
     }
 
@@ -913,7 +918,7 @@ function initTheme() {
             applyTheme(storedTheme);
             return;
         }
-    } catch (error) {
+    } catch {
         // Ignores storage errors if the browser blocks local storage.
     }
 
@@ -1591,9 +1596,9 @@ function openCustomerActionMenu(customerID, anchor = null, point = null) {
         const action = button.dataset.action;
         closeCustomerActionMenu();
 
-        if (action === "edit") editCustomer(customerID);
-        if (action === "history") customerHistory(customerID);
-        if (action === "status") setCustomerStatus(customerID, !active);
+        if (action === "edit") window.editCustomer(customerID);
+        if (action === "history") window.customerHistory(customerID);
+        if (action === "status") window.setCustomerStatus(customerID, !active);
     });
 }
 
@@ -2487,7 +2492,7 @@ $("refreshReports").addEventListener("click", loadReports);
 $("reportType").addEventListener("change", renderReportTable);
 $("clearReportDates").addEventListener("click", () => { $("reportStart").value = ""; $("reportEnd").value = ""; loadReports(); });
 
-$("exportCurrentCsv").addEventListener("click", async event => {
+$("exportCurrentCsv").addEventListener("click", async () => {
     try {
         await ensureCurrentReportData();
         const type = $("reportType").value;
@@ -2496,8 +2501,9 @@ $("exportCurrentCsv").addEventListener("click", async event => {
         updateLoading();
         const response = await fetch(`/api/reports/csv/${type}${query ? `?${query}` : ""}`, { headers: { Authorization: `Bearer ${token}` } });
         if (!response.ok) {
-            let message = "Export failed.";
-            try { message = (await response.json()).message || message; } catch {}
+            const errorBody = await response.json().catch(() => null);
+            const message = errorBody?.message || "Export failed.";
+
             throw new Error(message);
         }
         const blob = await response.blob();

@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { assertFirebaseProject } = require("./utils/firebase-project");
 const {
     initializeApp: initializeAdminApp,
     cert,
@@ -22,7 +23,10 @@ function loadServiceAccount() {
         try {
             serviceAccount = JSON.parse(fromEnv);
         } catch (error) {
-            throw new Error(`GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: ${error.message}`);
+            throw new Error(
+                `GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: ${error.message}`,
+                { cause: error }
+            );
         }
     } else {
         const isCloudflareWorker = process.env.CLOUDFLARE_WORKER === "true";
@@ -43,7 +47,10 @@ function loadServiceAccount() {
         try {
             serviceAccount = JSON.parse(fs.readFileSync(localKeyPath, "utf8"));
         } catch (error) {
-            throw new Error(`Could not load Firebase service account: ${error.message}`);
+            throw new Error(
+                `Could not load Firebase service account: ${error.message}`,
+                { cause: error }
+            );
         }
     }
 
@@ -51,11 +58,7 @@ function loadServiceAccount() {
         throw new Error("Firebase service account is missing project_id.");
     }
 
-    if (serviceAccount.project_id !== "xtech-automation") {
-        throw new Error(
-            `Wrong Firebase project. Expected xtech-automation but got ${serviceAccount.project_id}`
-        );
-    }
+    assertFirebaseProject(serviceAccount.project_id, process.env);
 
     return serviceAccount;
 }
