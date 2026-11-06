@@ -16,7 +16,7 @@
     "cf:whoami": "wrangler whoami",
     "lint": "eslint backend frontend/js scripts worker",
     "format:check": "prettier --check .",
-    "test:unit": "node --test tests/serialization.test.js tests/validators.test.js tests/auth-middleware.test.js"
+    "test:unit": "node --test tests/serialization.test.js tests/validators.test.js tests/auth-middleware.test.js tests/system-routes.test.js"
   },
   "dependencies": {
     "@google/genai": "^2.23.0",
