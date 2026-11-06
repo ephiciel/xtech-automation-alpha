@@ -9,6 +9,7 @@ const files = [
   "backend/routes/pickups.routes.js",
   "backend/routes/sales.routes.js",
   "backend/routes/report-dashboard.routes.js",
+  "backend/routes/user-accounts.routes.js",
   "backend/routes/inventory.routes.js",
   "backend/routes/account-notification.routes.js",
   "backend/firebase.js",
@@ -33,7 +34,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -79,6 +80,19 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
 }
 
 const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+
+// Stage 4.4f1: user account handlers retain their admin-only authorization.
+const userAccountRoutesJs = fs.readFileSync(path.join(root, "backend/routes/user-accounts.routes.js"), "utf8");
+if (userAccountRoutesJs.includes('app.get("/api/users"') &&
+    userAccountRoutesJs.includes('app.post("/api/users"') &&
+    userAccountRoutesJs.includes('app.patch("/api/users/:uid/status"') &&
+    /registerUserAccountRoutes\(app/.test(serverJs) &&
+    (userAccountRoutesJs.match(/roles\("admin"\)/g) || []).length === 3 &&
+    userAccountRoutesJs.includes("auth.createUser") &&
+    userAccountRoutesJs.includes("auth.updateUser")) {
+  pass("admin user account routes retain staff creation and status controls");
+} else fail("user-account route extraction incomplete");
+
 
 // Stage 4.4e: retain reporting, CSV export and dashboard route security.
 const reportDashboardJs = fs.readFileSync(path.join(root, "backend/routes/report-dashboard.routes.js"), "utf8");
