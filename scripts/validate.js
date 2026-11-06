@@ -5,6 +5,9 @@ const { execFileSync } = require("child_process");
 const root = path.join(__dirname, "..");
 const files = [
   "backend/server.js",
+  "backend/routes/email-otp.routes.js",
+  "backend/routes/customer-registration.routes.js",
+  "backend/routes/ai-assistant.routes.js",
   "backend/routes/customers.routes.js",
   "backend/routes/pickups.routes.js",
   "backend/routes/sales.routes.js",
@@ -35,7 +38,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -81,12 +84,20 @@ if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) 
 }
 
 const serverJs = fs.readFileSync(path.join(root, "backend/server.js"), "utf8");
+const extractedAuthAiJs = ["backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js"].map(file => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
+const combinedAuthAiSource = serverJs + "\n" + extractedAuthAiJs;
+if (["registerEmailOtpRoutes", "registerCustomerRegistrationRoutes", "registerAiAssistantRoutes"].every(name => serverJs.includes(name)) &&
+    extractedAuthAiJs.includes("registrationPending: true") &&
+    extractedAuthAiJs.includes("createCustomToken") && extractedAuthAiJs.includes("AI_ROLE_SECTIONS") &&
+    extractedAuthAiJs.includes("chatCollectionFor")) pass("email OTP, customer registration and AI assistant routes are modularized");
+else fail("combined authentication and AI modularization is incomplete");
+
 
 // Stage 4.4f2: customer profile retrieval and editing stay customer-only.
 const customerProfileRoutesJs = fs.readFileSync(path.join(root, "backend/routes/customer-profile.routes.js"), "utf8");
 if (customerProfileRoutesJs.includes('app.get("/api/profile"') &&
     customerProfileRoutesJs.includes('app.put("/api/profile"') &&
-    /registerCustomerProfileRoutes\(app/.test(serverJs) &&
+    /registerCustomerProfileRoutes\(app/.test(combinedAuthAiSource) &&
     (customerProfileRoutesJs.match(/roles\("customer"\)/g) || []).length === 2 &&
     customerProfileRoutesJs.includes("auth.updateUser") &&
     customerProfileRoutesJs.includes('where("userUID", "==", req.user.uid)')) {
@@ -99,7 +110,7 @@ const userAccountRoutesJs = fs.readFileSync(path.join(root, "backend/routes/user
 if (userAccountRoutesJs.includes('app.get("/api/users"') &&
     userAccountRoutesJs.includes('app.post("/api/users"') &&
     userAccountRoutesJs.includes('app.patch("/api/users/:uid/status"') &&
-    /registerUserAccountRoutes\(app/.test(serverJs) &&
+    /registerUserAccountRoutes\(app/.test(combinedAuthAiSource) &&
     (userAccountRoutesJs.match(/roles\("admin"\)/g) || []).length === 3 &&
     userAccountRoutesJs.includes("auth.createUser") &&
     userAccountRoutesJs.includes("auth.updateUser")) {
@@ -112,7 +123,7 @@ const reportDashboardJs = fs.readFileSync(path.join(root, "backend/routes/report
 if (reportDashboardJs.includes('app.get("/api/reports/summary"') &&
     reportDashboardJs.includes('app.get("/api/reports/csv/:type"') &&
     reportDashboardJs.includes('app.get("/api/dashboard"') &&
-    /registerReportDashboardRoutes\(app/.test(serverJs) &&
+    /registerReportDashboardRoutes\(app/.test(combinedAuthAiSource) &&
     reportDashboardJs.includes('roles("admin")') &&
     reportDashboardJs.includes('roles("admin", "secretary", "warehouse")') &&
     reportDashboardJs.includes("res.setHeader") &&
@@ -125,7 +136,7 @@ if (reportDashboardJs.includes('app.get("/api/reports/summary"') &&
 const salesRoutesJs = fs.readFileSync(path.join(root, "backend/routes/sales.routes.js"), "utf8");
 if (salesRoutesJs.includes('app.get("/api/sales"') &&
     salesRoutesJs.includes('app.post("/api/sales"') &&
-    /registerSalesRoutes\(app/.test(serverJs) &&
+    /registerSalesRoutes\(app/.test(combinedAuthAiSource) &&
     salesRoutesJs.includes('roles("admin", "secretary")') &&
     salesRoutesJs.includes("runTransaction") &&
     salesRoutesJs.includes("SALE_OUT") &&
@@ -138,7 +149,7 @@ if (salesRoutesJs.includes('app.get("/api/sales"') &&
 const pickupRoutesJs = fs.readFileSync(path.join(root, "backend/routes/pickups.routes.js"), "utf8");
 const pickupRoutesExpected = ["/api/pickups", "/api/pickups/:id/status"];
 if (pickupRoutesExpected.every(p => pickupRoutesJs.includes(p)) &&
-    /registerPickupRoutes\(app/.test(serverJs) &&
+    /registerPickupRoutes\(app/.test(combinedAuthAiSource) &&
     pickupRoutesJs.includes('roles("admin", "secretary", "customer")') &&
     pickupRoutesJs.includes("PICKUP_OUT") && pickupRoutesJs.includes("runTransaction")) {
   pass("pickup routes retain permission checks and transactional stock deduction");
@@ -150,7 +161,7 @@ const customerRoutesJs = fs.readFileSync(path.join(root, "backend/routes/custome
 const customerPaths = ["/api/customers", "/api/customers/:id",
   "/api/customers/:id/status", "/api/customers/:id/history"];
 if (customerPaths.every(p => customerRoutesJs.includes(p)) &&
-    /registerCustomerRoutes\(app/.test(serverJs) &&
+    /registerCustomerRoutes\(app/.test(combinedAuthAiSource) &&
     customerRoutesJs.includes('roles("admin", "secretary")')) {
   pass("customer routes are modularized with original role permissions");
 } else fail("customer route extraction incomplete");
@@ -163,13 +174,13 @@ const requiredInventoryRoutePaths = [
   "/api/inventory/stock-in", "/api/inventory/stock-out", "/api/inventory/transactions"
 ];
 if (requiredInventoryRoutePaths.every(p => inventoryRoutesJs.includes(p)) &&
-    /registerInventoryRoutes\(app/.test(serverJs) && inventoryRoutesJs.includes("db.runTransaction(")) {
+    /registerInventoryRoutes\(app/.test(combinedAuthAiSource) && inventoryRoutesJs.includes("db.runTransaction(")) {
   pass("inventory routes are modularized with stock transaction logic retained");
 } else fail("inventory route extraction incomplete");
 
 const accountRoutesJs = fs.readFileSync(path.join(root, "backend/routes/account-notification.routes.js"), "utf8");
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-if (/emailDomainCanReceiveMail/.test(serverJs) && /normalizePhilippineMobile/.test(serverJs) && /registrationPending/.test(serverJs) && /gmail\.comcom/.test(appJs)) {
+if (/emailDomainCanReceiveMail/.test(combinedAuthAiSource) && /normalizePhilippineMobile/.test(combinedAuthAiSource) && /registrationPending/.test(combinedAuthAiSource) && /gmail\.comcom/.test(appJs)) {
   pass("V20 verified email and Philippine mobile validation are present");
 } else {
   fail("V20 contact validation or registration verification is missing");
@@ -192,7 +203,7 @@ if (/GOOGLE_SERVICE_ACCOUNT_JSON/.test(firebaseJs) && /@ljoukov\/firebase-admin-
   fail("backend/firebase.js must support GOOGLE_SERVICE_ACCOUNT_JSON and Worker-compatible Firestore");
 }
 
-if (/startServer/.test(serverJs) && /CLOUDFLARE_WORKER/.test(serverJs)) {
+if (/startServer/.test(combinedAuthAiSource) && /CLOUDFLARE_WORKER/.test(combinedAuthAiSource)) {
   pass("Express server supports Cloudflare Workers startup");
 } else {
   fail("backend/server.js must support Cloudflare Workers startup");
@@ -210,7 +221,7 @@ if (packageJson.dependencies?.["@ljoukov/firebase-admin-cloudflare"] && packageJ
   fail("package.json must include Worker-compatible Firestore and Wrangler");
 }
 
-if (/\/api\/notifications/.test(accountRoutesJs) && /registerAccountNotificationRoutes/.test(serverJs) && /purchase_recorded/.test(salesRoutesJs) && /pickup_approved/.test(pickupRoutesJs) && /pickup_completed/.test(pickupRoutesJs) && /loadNotifications/.test(appJs)) {
+if (/\/api\/notifications/.test(accountRoutesJs) && /registerAccountNotificationRoutes/.test(combinedAuthAiSource) && /purchase_recorded/.test(salesRoutesJs) && /pickup_approved/.test(pickupRoutesJs) && /pickup_completed/.test(pickupRoutesJs) && /loadNotifications/.test(appJs)) {
   pass("customer purchase and pickup notifications are configured");
 } else {
   fail("customer notification backend or frontend is missing");
