@@ -45,6 +45,7 @@ jobs:
           "backend/routes/*.routes.js"
           "backend/utils/*.js"
           frontend/js/sidebar-toggle.js
+          frontend/js/shared-utils.js
 
       - name: Static project validation
         run: npm test
