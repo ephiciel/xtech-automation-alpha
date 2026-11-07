@@ -23,6 +23,8 @@ const files = [
   "scripts/cleanup-v18-data.js",
   "frontend/js/app.js",
   "frontend/js/shared-utils.js",
+  "frontend/js/api-client.js",
+  "frontend/js/auth-client.js",
   "frontend/index.html",
   "frontend/css/style.css",
   "worker/index.mjs",
@@ -39,7 +41,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -81,6 +83,13 @@ const appJs = fs.readFileSync(path.join(root, "frontend/js/app.js"), "utf8");
 const sharedUtilsJs = fs.readFileSync(path.join(root, "frontend/js/shared-utils.js"), "utf8");
 if (html.indexOf('<script src="js/shared-utils.js"></script>') < html.indexOf('<script src="js/app.js"></script>') && html.includes('<script src="js/shared-utils.js"></script>')) pass("shared utilities load before app.js");
 else fail("frontend helper script load order is incorrect");
+const scriptOrder = ["js/shared-utils.js", "js/api-client.js", "js/auth-client.js", "js/app.js"]
+  .map(src => html.indexOf('<script src="' + src + '"></script>'));
+if (scriptOrder.every((position, index) => position >= 0 && (index === 0 || position > scriptOrder[index - 1])) &&
+    /XTechApiClient\.createApiClient/.test(appJs) &&
+    /XTechAuthClient\.createFirebaseAuthClient/.test(appJs) &&
+    /XTechAuthClient\.createEmailOtpStore/.test(appJs)) pass("frontend API and authentication modules load before app.js");
+else fail("frontend API or authentication module integration is incomplete");
 if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) && /sendPasswordResetEmail/.test(appJs)) {
   pass("V19 login recovery and persistent OTP countdown are present");
 } else {
