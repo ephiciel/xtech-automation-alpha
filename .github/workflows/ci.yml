@@ -1,0 +1,62 @@
+name: XTECH Quality Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, format, and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Formatting (readability-edited files)
+        run: >-
+          npx prettier --check
+          backend/server.js
+          backend/middleware/auth.js
+          "backend/routes/*.routes.js"
+          "backend/utils/*.js"
+          frontend/js/sidebar-toggle.js
+
+      - name: Static project validation
+        run: npm test
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Staging isolation tests (mocked, no credentials)
+        run: npm run test:staging-isolation
+
+      - name: Staging preflight tests (mocked, no credentials)
+        run: npm run test:staging-preflight
