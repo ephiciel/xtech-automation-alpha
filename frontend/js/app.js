@@ -21,10 +21,8 @@ let notificationPollTimer = null;
 let lastNotificationUnreadCount = 0;
 
 // Stores Firebase modular authentication helpers and temporary MFA state
-let firebaseAppInstance = null;
 let firebaseAuthInstance = null;
 let firebaseAuthApi = null;
-let firebaseInitPromise = null;
 let selectedSignInMethod = "password-totp";
 let authFlowInProgress = false;
 let pendingMfaResolver = null;
@@ -42,15 +40,14 @@ let pendingPasswordChangeMfaHint = null;
 // Finds an element by its ID
 const $ = id => document.getElementById(id);
 
-// Shared functions are loaded by shared-utils.js before this application script.
-if (!window.XTechSharedUtils) {
-    throw new Error("XTECH shared utilities are missing. Check script loading order.");
+// Frontend service modules must load before the UI application starts.
+if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient) {
+    throw new Error("XTECH frontend dependencies are missing. Check script loading order.");
 }
 const {
     esc,
     fmtDateTime,
     fmtDate,
-    datePart,
     todayYMD,
     within,
     validationError,
@@ -89,42 +86,20 @@ function updateLoading() {
     $("loadingOverlay")?.classList.toggle("hidden", pendingRequests <= 0);
 }
 
-// Sends an authenticated request to the backend API
-async function api(url, opts = {}) {
-    const silent = opts.silent === true;
-    delete opts.silent;
-    opts.headers = opts.headers || {};
-    if (token) opts.headers.Authorization = `Bearer ${token}`;
-    if (opts.body && !opts.headers["Content-Type"]) opts.headers["Content-Type"] = "application/json";
-
-    if (!silent) {
-        pendingRequests++;
+// Shared API client reads the current token and updates the existing loading overlay.
+const api = window.XTechApiClient.createApiClient({
+    getToken: () => token,
+    onPendingChange: delta => {
+        pendingRequests = Math.max(0, pendingRequests + delta);
         updateLoading();
     }
+});
 
-    try {
-        const response = await fetch(url, opts);
-        let data = {};
-
-        try {
-            data = await response.json();
-        } catch {
-            // Empty or non-JSON responses use the default empty object.
-        }
-        if (!response.ok) {
-            const error = new Error(data.message || `Request failed (${response.status})`);
-            error.status = response.status;
-            Object.assign(error, data);
-            throw error;
-        }
-        return data;
-    } finally {
-        if (!silent) {
-            pendingRequests = Math.max(0, pendingRequests - 1);
-            updateLoading();
-        }
-    }
-}
+// Firebase SDK bootstrapping and OTP persistence are independent of UI event handlers.
+const firebaseClient = window.XTechAuthClient.createFirebaseAuthClient({ request: api });
+const emailOtpStore = window.XTechAuthClient.createEmailOtpStore({
+    key: EMAIL_OTP_SESSION_KEY
+});
 
 // Disables a button while an action is running
 async function busy(button, work, workingText = "Please wait…") {
@@ -371,57 +346,24 @@ function applyRole() {
     }
 }
 
-// Loads the Firebase modular SDK used by password, TOTP, and custom-token email-code sign in
-async function loadFirebaseAuthApi() {
-    if (firebaseAuthApi) return firebaseAuthApi;
-
-    const [appModule, authModule] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js")
-    ]);
-
-    firebaseAuthApi = { ...appModule, ...authModule };
-    return firebaseAuthApi;
-}
-
-// Loads the Firebase settings and starts Firebase Authentication
+// Initializes the shared Firebase client and keeps the existing UI-facing state.
 async function initFirebase() {
-    if (firebaseAuthInstance && firebaseAuthApi) return firebaseAuthInstance;
-    if (firebaseInitPromise) return firebaseInitPromise;
-
-    firebaseInitPromise = (async () => {
-        appConfig = await api("/api/config", { silent: true });
-        if (!appConfig.apiKey || !appConfig.projectId || !appConfig.appId) {
-            throw new Error("Firebase web configuration is missing. Check FIREBASE_API_KEY, FIREBASE_PROJECT_ID, and FIREBASE_APP_ID in your deployment environment.");
-        }
-
-        const firebaseApi = await loadFirebaseAuthApi();
-        if (!firebaseAppInstance) firebaseAppInstance = firebaseApi.initializeApp(appConfig);
-        if (!firebaseAuthInstance) firebaseAuthInstance = firebaseApi.getAuth(firebaseAppInstance);
-        return firebaseAuthInstance;
-    })();
-
-    try {
-        return await firebaseInitPromise;
-    } catch (error) {
-        firebaseInitPromise = null;
-        throw error;
-    }
+    const result = await firebaseClient.initFirebase();
+    firebaseAuthApi = result.firebaseApi;
+    firebaseAuthInstance = result.auth;
+    appConfig = result.config;
+    return result.auth;
 }
 
 // Stores the email OTP screen state so a page refresh does not reset the resend countdown
 function saveEmailOtpSession() {
     if (!pendingEmailOtpEmail || !emailOtpExpiresAt) return;
-    try {
-        sessionStorage.setItem(EMAIL_OTP_SESSION_KEY, JSON.stringify({
-            email: pendingEmailOtpEmail,
-            maskedEmail: pendingEmailOtpMaskedEmail,
-            resendAvailableAt: emailOtpResendAvailableAt,
-            expiresAt: emailOtpExpiresAt
-        }));
-    } catch {
-        // The backend still enforces the cooldown if browser storage is unavailable.
-    }
+    emailOtpStore.save({
+        email: pendingEmailOtpEmail,
+        maskedEmail: pendingEmailOtpMaskedEmail,
+        resendAvailableAt: emailOtpResendAvailableAt,
+        expiresAt: emailOtpExpiresAt
+    });
 }
 
 // Stops the live resend timer
@@ -439,11 +381,7 @@ function clearEmailOtpSession() {
     pendingEmailOtpMaskedEmail = "";
     emailOtpResendAvailableAt = 0;
     emailOtpExpiresAt = 0;
-    try {
-        sessionStorage.removeItem(EMAIL_OTP_SESSION_KEY);
-    } catch {
-        // Ignores storage errors when session storage is unavailable.
-    }
+    emailOtpStore.clear();
 
     if ($("resendEmailOtp")) {
         $("resendEmailOtp").disabled = false;
@@ -483,12 +421,7 @@ function startEmailOtpCountdown() {
 
 // Restores an unfinished email OTP sign-in after the page is refreshed
 function restoreEmailOtpSession() {
-    let saved;
-    try {
-        saved = JSON.parse(sessionStorage.getItem(EMAIL_OTP_SESSION_KEY) || "null");
-    } catch {
-        saved = null;
-    }
+    const saved = emailOtpStore.read();
 
     if (!saved?.email || !saved?.expiresAt || Number(saved.expiresAt) <= Date.now()) {
         clearEmailOtpSession();

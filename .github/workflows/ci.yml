@@ -46,6 +46,8 @@ jobs:
           "backend/utils/*.js"
           frontend/js/sidebar-toggle.js
           frontend/js/shared-utils.js
+          frontend/js/api-client.js
+          frontend/js/auth-client.js
 
       - name: Static project validation
         run: npm test
