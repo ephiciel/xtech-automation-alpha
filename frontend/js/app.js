@@ -1116,6 +1116,7 @@ const inventoryUi = window.XTechInventoryUi.createInventoryUi({
     $,
     api,
     toast,
+    setMessage,
     busy,
     esc,
     badge,
@@ -1142,9 +1143,7 @@ const inventoryUi = window.XTechInventoryUi.createInventoryUi({
     confirm
 });
 async function loadInventory() { return inventoryUi.loadInventory(); }
-function renderProducts() { return inventoryUi.renderProducts(); }
 async function loadTransactions() { return inventoryUi.loadTransactions(); }
-function renderTransactions() { return inventoryUi.renderTransactions(); }
 
 // Handles customer records and customer history
 // Loads customer records from the backend

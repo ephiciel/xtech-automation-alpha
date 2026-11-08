@@ -74,6 +74,7 @@ function harness({
             return result;
         },
         toast: (msg) => toasts.push(msg),
+        setMessage: (id, message, kind = "error") => messages.push({ id, message, kind }),
         busy: async (_button, action) => action(),
         esc: safe,
         badge: (status) => `<span>${safe(status)}</span>`,
@@ -325,4 +326,41 @@ test("HTML loads inventory module between auth client and app", () => {
         html.indexOf(`<script src="js/${name}"></script>`)
     );
     assert.ok(chain.every((v, i) => v >= 0 && (i === 0 || v > chain[i - 1])));
+});
+
+test("product create form displays success and uses the existing endpoint", async () => {
+    const h = harness({ productItems: [cleaner] });
+    h.$("productID").value = "CHEM-03";
+    h.$("productName").value = "New Cleaner";
+    h.$("category").value = "Cleaning Supply";
+    h.$("description").value = "Inventory test";
+    await h.$("productForm").handlers.submit({
+        preventDefault() {},
+        submitter: null,
+        target: { reset() {} }
+    });
+    const created = h.requests.find(
+        (request) => request.url === "/api/products" && request.opts.method === "POST"
+    );
+    assert.ok(created, "product creation must call POST /api/products");
+    assert.equal(JSON.parse(created.opts.body).productID, "CHEM-03");
+    assert.ok(h.messages.some((item) => item.id === "productMessage" && item.kind === "success"));
+});
+
+test("product create form displays an API failure instead of a missing-dependency error", async () => {
+    const h = harness({ responses: { "/api/products": new Error("Simulated write failure") } });
+    h.$("productID").value = "CHEM-04";
+    h.$("productName").value = "New Cleaner";
+    h.$("category").value = "Cleaning Supply";
+    h.$("description").value = "";
+    await h.$("productForm").handlers.submit({
+        preventDefault() {},
+        submitter: null,
+        target: { reset() {} }
+    });
+    assert.ok(
+        h.messages.some(
+            (item) => item.id === "productMessage" && item.message === "Simulated write failure"
+        )
+    );
 });

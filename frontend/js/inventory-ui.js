@@ -8,6 +8,7 @@
             $,
             api,
             toast,
+            setMessage,
             busy,
             esc,
             badge,
