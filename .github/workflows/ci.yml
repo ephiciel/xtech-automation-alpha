@@ -48,6 +48,7 @@ jobs:
           frontend/js/shared-utils.js
           frontend/js/api-client.js
           frontend/js/auth-client.js
+          frontend/js/inventory-ui.js
 
       - name: Static project validation
         run: npm test
