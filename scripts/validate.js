@@ -25,6 +25,7 @@ const files = [
   "frontend/js/shared-utils.js",
   "frontend/js/api-client.js",
   "frontend/js/auth-client.js",
+  "frontend/js/inventory-ui.js",
   "frontend/index.html",
   "frontend/css/style.css",
   "worker/index.mjs",
@@ -41,7 +42,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -90,6 +91,17 @@ if (scriptOrder.every((position, index) => position >= 0 && (index === 0 || posi
     /XTechAuthClient\.createFirebaseAuthClient/.test(appJs) &&
     /XTechAuthClient\.createEmailOtpStore/.test(appJs)) pass("frontend API and authentication modules load before app.js");
 else fail("frontend API or authentication module integration is incomplete");
+const inventoryScript = fs.readFileSync(path.join(root, "frontend/js/inventory-ui.js"), "utf8");
+const inventoryScriptIndex = html.indexOf('<script src="js/inventory-ui.js"></script>');
+const appScriptIndex = html.indexOf('<script src="js/app.js"></script>');
+if (inventoryScriptIndex >= 0 && inventoryScriptIndex < appScriptIndex &&
+    /XTechInventoryUi\.createInventoryUi/.test(appJs) &&
+    /function loadInventory\(/.test(inventoryScript) &&
+    /function renderTransactions\(/.test(inventoryScript) &&
+    /window\.archiveProduct/.test(inventoryScript) &&
+    /window\.restoreProduct/.test(inventoryScript)) {
+  pass("inventory UI extraction keeps product, stock and transaction actions registered");
+} else fail("inventory UI module extraction is incomplete");
 if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) && /sendPasswordResetEmail/.test(appJs)) {
   pass("V19 login recovery and persistent OTP countdown are present");
 } else {
