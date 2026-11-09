@@ -49,6 +49,8 @@ jobs:
           frontend/js/api-client.js
           frontend/js/auth-client.js
           frontend/js/inventory-ui.js
+          frontend/js/customer-ui.js
+          frontend/js/pickup-ui.js
 
       - name: Static project validation
         run: npm test

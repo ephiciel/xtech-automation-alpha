@@ -228,61 +228,8 @@ function mergeFormItem(list, productID, quantity) {
     else list.push({ productID, quantity });
 }
 
-// Displays the products added to a pickup request
-function renderPickupFormItems() {
-    const container = $("pickupItemList");
-    if (!container) return;
-    container.innerHTML = pickupFormItems.length ? pickupFormItems.map(item => {
-        const product = productById(item.productID);
-        return `<div class="item-row">
-            <div><strong>${esc(product?.productName || item.productID)}</strong><small>${esc(item.productID)} · Available: ${Number(product?.quantity ?? 0)} ${esc(product?.unit || "units")}</small></div>
-            <span>Requested: <strong>${item.quantity}</strong></span>
-            <button type="button" class="small-btn ghost dark-ghost" onclick="removePickupItem('${esc(item.productID)}')">Remove</button>
-        </div>`;
-    }).join("") : '<div class="empty-state">No products added to this pickup request yet.</div>';
-}
-
-// Keeps pickup quantities synchronized with the same inventory values shown to admin users.
-function syncPickupQuantityLimit() {
-    const select = $("pickupProduct");
-    const input = $("pickupQuantity");
-    const hint = $("pickupStockHint");
-    if (!select || !input) return;
-
-    const product = productById(select.value);
-    if (!product) {
-        input.max = "1";
-        input.value = "1";
-        input.disabled = true;
-        if ($("addPickupItem")) $("addPickupItem").disabled = true;
-        if (hint) hint.textContent = "Select a product to view the current admin inventory quantity.";
-        return;
-    }
-
-    const alreadyAdded = pickupFormItems.find(item => item.productID === product.productID)?.quantity || 0;
-    const adminStock = Math.max(0, Number(product.quantity || 0));
-    const remaining = Math.max(0, adminStock - alreadyAdded);
-
-    input.max = String(Math.max(1, remaining));
-    input.disabled = remaining <= 0;
-    if ($("addPickupItem")) $("addPickupItem").disabled = remaining <= 0;
-    if (Number(input.value) > remaining || Number(input.value) < 1) input.value = remaining > 0 ? "1" : "";
-
-    if (hint) {
-        hint.textContent = remaining > 0
-            ? `Admin inventory: ${adminStock} ${product.unit || "units"}. ${alreadyAdded} already added to this request; ${remaining} can still be added.`
-            : `Admin inventory: ${adminStock} ${product.unit || "units"}. No more can be added to this request.`;
-    }
-}
-
-// Reloads the authoritative product stock used by the admin account.
-async function refreshPickupInventory() {
-    const data = await api("/api/products", { silent: true });
-    products = data.products || [];
-    updateProductSelectors();
-    renderPickupFormItems();
-    syncPickupQuantityLimit();
-}
+// Inventory product selectors still delegate pickup quantity checks to the pickup UI.
+function syncPickupQuantityLimit() { return pickupUi.syncPickupQuantityLimit(); }
 
 // Displays products and quantities in the current sale
 function renderSaleFormItems() {
@@ -1145,355 +1092,34 @@ const inventoryUi = window.XTechInventoryUi.createInventoryUi({
 async function loadInventory() { return inventoryUi.loadInventory(); }
 async function loadTransactions() { return inventoryUi.loadTransactions(); }
 
-// Handles customer records and customer history
-// Loads customer records from the backend
-async function loadCustomers() {
-    try {
-        const data = await api("/api/customers");
-        customers = data.customers || [];
-        renderCustomers();
-        updateCustomerSelectors();
-    } catch (error) { toast(error.message); }
-}
-
-// Closes the customer action dropdown
-function closeCustomerActionMenu() {
-    document.querySelector(".customer-action-menu")?.remove();
-}
-
-// Opens the customer action dropdown beside the menu button or mouse pointer
-function openCustomerActionMenu(customerID, anchor = null, point = null) {
-    closeCustomerActionMenu();
-
-    const customer = customers.find(item => item.id === customerID);
-    if (!customer) return;
-
-    const active = customer.active !== false;
-    const menu = document.createElement("div");
-    menu.className = "customer-action-menu";
-    menu.setAttribute("role", "menu");
-
-    menu.innerHTML = `
-        <button type="button" data-action="edit" role="menuitem">Edit customer</button>
-        <button type="button" data-action="history" role="menuitem">View history</button>
-        <button type="button" class="${active ? "customer-menu-danger" : "customer-menu-activate"}" data-action="status" role="menuitem">
-            ${active ? "Deactivate" : "Activate"}
-        </button>
-    `;
-
-    document.body.appendChild(menu);
-
-    let left = point?.x ?? 0;
-    let top = point?.y ?? 0;
-
-    if (anchor) {
-        const rect = anchor.getBoundingClientRect();
-        left = rect.right - menu.offsetWidth;
-        top = rect.bottom + 6;
-    }
-
-    const padding = 8;
-    const maxLeft = window.innerWidth - menu.offsetWidth - padding;
-    const maxTop = window.innerHeight - menu.offsetHeight - padding;
-
-    left = Math.max(padding, Math.min(left, maxLeft));
-    top = Math.max(padding, Math.min(top, maxTop));
-
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
-
-    menu.addEventListener("click", event => {
-        const button = event.target.closest("button[data-action]");
-        if (!button) return;
-
-        const action = button.dataset.action;
-        closeCustomerActionMenu();
-
-        if (action === "edit") window.editCustomer(customerID);
-        if (action === "history") window.customerHistory(customerID);
-        if (action === "status") window.setCustomerStatus(customerID, !active);
-    });
-}
-
-// Filters and displays customer records
-function renderCustomers() {
-    closeCustomerActionMenu();
-
-    const search = $("customerSearch").value.trim().toLowerCase();
-    const status = $("customerStatusFilter").value;
-    const rows = customers.filter(customer => {
-        const active = customer.active !== false;
-        return (!search || `${customer.name} ${customer.email} ${customer.phone} ${customer.company}`.toLowerCase().includes(search)) &&
-            (!status || (status === "active" ? active : !active));
-    });
-
-    $("customerTable").innerHTML = rows.length ? rows.map(customer => {
-        const active = customer.active !== false;
-
-        return `<tr class="customer-row" data-customer-id="${esc(customer.id)}">
-          <td><strong>${esc(customer.name)}</strong></td>
-          <td>${esc(customer.email)}</td>
-          <td>${esc(customer.phone || "—")}</td>
-          <td>${esc(customer.company || "—")}</td>
-          <td>${badge(active ? "Active" : "Inactive")}</td>
-          <td>${customer.userUID ? badge("Linked") : "No login account"}</td>
-          <td class="customer-action-cell">
-            <button
-              type="button"
-              class="customer-menu-btn"
-              data-customer-menu="${esc(customer.id)}"
-              aria-label="Open actions for ${esc(customer.name)}"
-              title="Customer actions"
-            >⋮</button>
-          </td>
-        </tr>`;
-    }).join("") : '<tr><td colspan="7"><div class="table-empty">No customers match the current filters.</div></td></tr>';
-
-    // Opens the menu when the three-dot button is clicked
-    document.querySelectorAll(".customer-menu-btn").forEach(button => {
-        button.addEventListener("click", event => {
-            event.stopPropagation();
-            openCustomerActionMenu(button.dataset.customerMenu, button);
-        });
-    });
-
-    // Opens the same menu when a customer row is right-clicked
-    document.querySelectorAll(".customer-row").forEach(row => {
-        row.addEventListener("contextmenu", event => {
-            if (event.target.closest("button, input, select, textarea, a")) return;
-            event.preventDefault();
-            openCustomerActionMenu(row.dataset.customerId, null, {
-                x: event.clientX,
-                y: event.clientY
-            });
-        });
-    });
-}
-
-["customerSearch", "customerStatusFilter"].forEach(id => $(id).addEventListener("input", renderCustomers));
-
-// Closes the customer action menu when clicking somewhere else
-document.addEventListener("click", event => {
-    if (!event.target.closest(".customer-action-menu, .customer-menu-btn")) closeCustomerActionMenu();
-});
-
-// Closes the customer action menu if the page moves
-window.addEventListener("resize", closeCustomerActionMenu);
-window.addEventListener("scroll", closeCustomerActionMenu, true);
-
-// Closes the customer action menu with the Escape key
-document.addEventListener("keydown", event => {
-    if (event.key === "Escape") closeCustomerActionMenu();
-});
-
-$("customerForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("customerMessage", "");
-    try {
-        const name = validateName($("customerName").value, "Customer name");
-        const email = validateEmail($("customerEmail").value);
-        const phone = validatePhone($("customerPhone").value);
-        const company = validateText($("customerCompany").value, "Company / Organization", 120);
-        const address = validateText($("customerAddress").value, "Address", 250);
-
-        await busy(event.submitter, () => api("/api/customers", {
-            method: "POST",
-            body: JSON.stringify({ name, email, phone, company, address })
-        }), "Registering…");
-        event.target.reset();
-        setMessage("customerMessage", "Customer registered successfully.", "success");
-        await Promise.all([loadCustomers(), loadDashboard()]);
-        toast("Customer registered");
-    } catch (error) { setMessage("customerMessage", error.message); }
-});
-
-// Opens the form used to edit a customer
-window.editCustomer = id => {
-    const customer = customers.find(item => item.id === id);
-    if (!customer) return;
-    $("modalBody").innerHTML = `<h2>Edit Customer</h2><form id="editCustomerForm" class="form-grid">
-      <label>Customer Name<input id="editCustomerName" value="${esc(customer.name)}" maxlength="80" required></label>
-      <label>Email Address<input id="editCustomerEmail" type="email" value="${esc(customer.email)}" maxlength="254" required></label>
-      <label>Phone Number<input id="editCustomerPhone" type="tel" value="${esc(customer.phone || "")}" maxlength="18" inputmode="tel" placeholder="09171234567 or +639171234567"></label>
-      <label>Company / Organization<input id="editCustomerCompany" value="${esc(customer.company || "")}" maxlength="120"></label>
-      <label class="wide">Address<input id="editCustomerAddress" value="${esc(customer.address || "")}" maxlength="250"></label>
-      <button class="primary wide">Save Customer Changes</button>
-    </form>`;
-    $("modal").classList.remove("hidden");
-    $("editCustomerForm").addEventListener("submit", async event => {
-        event.preventDefault();
-        try {
-            const name = validateName($("editCustomerName").value, "Customer name");
-            const email = validateEmail($("editCustomerEmail").value);
-            const phone = validatePhone($("editCustomerPhone").value);
-            const company = validateText($("editCustomerCompany").value, "Company / Organization", 120);
-            const address = validateText($("editCustomerAddress").value, "Address", 250);
-
-            await busy(event.submitter, () => api(`/api/customers/${encodeURIComponent(id)}`, {
-                method: "PUT",
-                body: JSON.stringify({ name, email, phone, company, address })
-            }), "Saving…");
-            closeModal(); await loadCustomers(); toast("Customer updated successfully");
-        } catch (error) { toast(error.message); }
-    });
-};
-
-// Activates or deactivates a customer record
-window.setCustomerStatus = async (id, active) => {
-    const customer = customers.find(item => item.id === id);
-    const verb = active ? "activate" : "deactivate";
-    if (!confirm(`${verb[0].toUpperCase() + verb.slice(1)} ${customer?.name || "this customer"}?${!active && customer?.userUID ? " Their login account will also be disabled." : ""}`)) return;
-    try {
-        await api(`/api/customers/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ active }) });
-        await Promise.all([loadCustomers(), loadDashboard()]);
-        toast(`Customer ${active ? "activated" : "deactivated"}`);
-    } catch (error) { toast(error.message); }
-};
-
+// Customer history and sales reuse the same summary helper.
 // Creates a short readable list of products and quantities
 function itemSummary(items = []) {
     return items.length ? items.map(item => `${esc(item.productName || productById(item.productID)?.productName || item.productID)} × ${Number(item.quantity)}`).join("<br>") : "—";
 }
 
-// Shows the selected customer's pickup and sales history
-window.customerHistory = async id => {
-    try {
-        const data = await api(`/api/customers/${encodeURIComponent(id)}/history`);
-        const pickupRows = data.pickups.length ? data.pickups.map(item => `<tr><td>${fmtDateTime(item.createdAt)}</td><td>${esc(item.pickupID)}</td><td>${fmtDate(item.requestedDate)}</td><td>${badge(item.status)}</td><td>${itemSummary(item.items)}</td></tr>`).join("") : '<tr><td colspan="5">No pickup history.</td></tr>';
-        const saleRows = data.sales.length ? data.sales.map(item => `<tr><td>${fmtDateTime(item.createdAt)}</td><td>${esc(item.saleID)}</td><td>${badge(item.status)}</td><td>${itemSummary(item.items)}</td></tr>`).join("") : '<tr><td colspan="4">No sales history.</td></tr>';
-        $("modalBody").innerHTML = `<h2>${esc(data.customer.name)} — Customer History</h2><div class="detail-grid"><div><span>Email</span><strong>${esc(data.customer.email)}</strong></div><div><span>Phone</span><strong>${esc(data.customer.phone || "—")}</strong></div><div><span>Company</span><strong>${esc(data.customer.company || "—")}</strong></div><div><span>Status</span><strong>${data.customer.active !== false ? "Active" : "Inactive"}</strong></div></div>
-          <h3>Pickup History (${data.pickups.length})</h3><div class="table-wrap"><table><thead><tr><th>Created</th><th>Pickup Reference</th><th>Pickup Date</th><th>Status</th><th>Products</th></tr></thead><tbody>${pickupRows}</tbody></table></div>
-          <h3>Sales History (${data.sales.length})</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Sale Reference</th><th>Status</th><th>Products</th></tr></thead><tbody>${saleRows}</tbody></table></div>`;
-        $("modal").classList.remove("hidden");
-    } catch (error) { toast(error.message); }
-};
-
-// Handles pickup requests and pickup status changes
-// Loads pickup requests from the backend
-async function loadPickups() {
-    try {
-        $("pickupDate").min = todayYMD();
-        const needCustomers = profile?.role !== "customer";
-        const [pickupData] = await Promise.all([api("/api/pickups"), ensureFormData({ needCustomers })]);
-        pickups = pickupData.pickups || [];
-        renderPickupFormItems();
-        renderPickups();
-    } catch (error) { toast(error.message); }
+// Customer and pickup modules register UI events without changing application state ownership.
+if (!window.XTechCustomerUi || !window.XTechPickupUi) {
+    throw new Error("XTECH customer or pickup UI module is missing. Check script loading order.");
 }
-
-// Filters and displays pickup requests
-function renderPickups() {
-    const search = $("pickupSearch").value.trim().toLowerCase();
-    const status = $("pickupStatusFilter").value;
-    const start = $("pickupFrom").value;
-    const end = $("pickupTo").value;
-    const rows = pickups.filter(pickup => {
-        const productText = (pickup.items || []).map(item => `${item.productID} ${productById(item.productID)?.productName || ""}`).join(" ");
-        return (!search || `${pickup.pickupID} ${pickup.customerName} ${productText} ${pickup.notes || ""}`.toLowerCase().includes(search)) &&
-            (!status || pickup.status === status) && within(pickup.requestedDate, start, end);
-    });
-
-    $("pickupTable").innerHTML = rows.length ? rows.map(pickup => {
-        let actions = "—";
-        if (profile?.role === "customer" && pickup.status === "Pending") {
-            actions = `<button class="small-btn ghost dark-ghost" onclick="setPickup('${esc(pickup.id || pickup.pickupID)}', 'Cancelled')">Cancel Request</button>`;
-        } else if (profile?.role !== "customer" && pickup.status === "Pending") {
-            actions = `<button class="small-btn secondary" onclick="setPickup('${esc(pickup.id || pickup.pickupID)}', 'Approved')">Approve</button><button class="small-btn ghost dark-ghost" onclick="setPickup('${esc(pickup.id || pickup.pickupID)}', 'Cancelled')">Cancel</button>`;
-        } else if (profile?.role !== "customer" && pickup.status === "Approved") {
-            actions = `<button class="small-btn primary" onclick="setPickup('${esc(pickup.id || pickup.pickupID)}', 'Completed')">Complete Pickup</button><button class="small-btn ghost dark-ghost" onclick="setPickup('${esc(pickup.id || pickup.pickupID)}', 'Cancelled')">Cancel</button>`;
-        }
-        return `<tr><td>${fmtDateTime(pickup.createdAt)}</td><td><strong>${esc(pickup.pickupID)}</strong></td><td>${esc(pickup.customerName || customerNameFor(pickup.customerID, "Walk-in / No registered customer"))}</td><td>${fmtDate(pickup.requestedDate)}</td><td>${badge(pickup.status)}</td><td>${itemSummary(pickup.items)}<small class="table-subtext">Total ordered: ${Number(pickup.totalQuantity ?? (pickup.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</small></td><td class="wrap-cell">${esc(pickup.notes || "—")}</td><td>${actions}</td></tr>`;
-    }).join("") : '<tr><td colspan="8"><div class="table-empty">No pickup requests match the current filters.</div></td></tr>';
-}
-
-["pickupSearch", "pickupStatusFilter", "pickupFrom", "pickupTo"].forEach(id => $(id).addEventListener("input", renderPickups));
-
-$("pickupProduct").addEventListener("change", syncPickupQuantityLimit);
-
-$("addPickupItem").addEventListener("click", async event => {
-    try {
-        // Refresh first so the customer is checked against the same current stock the admin account uses.
-        await busy(event.currentTarget, refreshPickupInventory, "Checking Stock…");
-        syncPickupQuantityLimit();
-
-        const productID = $("pickupProduct").value;
-        const quantity = Number($("pickupQuantity").value);
-        const product = productById(productID);
-        if (!product) return toast("Select a product first.");
-
-        validatePositiveWholeNumber(quantity, "Pickup quantity");
-
-        const existing = pickupFormItems.find(item => item.productID === productID);
-        const requestedTotal = quantity + (existing?.quantity || 0);
-        const adminStock = Number(product.quantity || 0);
-        if (requestedTotal > adminStock) {
-            return toast(`Order cannot proceed. Admin inventory shows only ${adminStock} ${product.unit || "units"} of ${product.productName}, but this request would total ${requestedTotal}.`);
-        }
-
-        mergeFormItem(pickupFormItems, productID, quantity);
-        $("pickupQuantity").value = "1";
-        renderPickupFormItems();
-        syncPickupQuantityLimit();
-    } catch (error) {
-        toast(error.message);
-    }
+const customerUi = window.XTechCustomerUi.createCustomerUi({
+    $, api, toast, setMessage, busy, esc, badge, validateName, validateEmail, validatePhone,
+    validateText, closeModal, loadDashboard, updateCustomerSelectors, itemSummary, fmtDateTime,
+    fmtDate, getCustomers: () => customers, setCustomers: value => { customers = value; },
+    confirm, document, window
 });
-
-// Removes a product from the current pickup request
-window.removePickupItem = productID => {
-    pickupFormItems = pickupFormItems.filter(item => item.productID !== productID);
-    renderPickupFormItems();
-    syncPickupQuantityLimit();
-};
-
-$("pickupForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("pickupMessage", "");
-    if (!pickupFormItems.length) return setMessage("pickupMessage", "Add at least one product to the pickup request.");
-    try {
-        const requestedDate = validateFutureDate($("pickupDate").value, "Requested pickup date");
-        const notes = validateText($("pickupNotes").value, "Pickup notes", 500);
-
-        // Recheck immediately before submission so stale browser data cannot be used.
-        await refreshPickupInventory();
-        for (const item of pickupFormItems) {
-            const product = productById(item.productID);
-            if (!product) throw new Error(`Product ${item.productID} is no longer available.`);
-            const adminStock = Number(product.quantity || 0);
-            if (item.quantity > adminStock) {
-                throw new Error(`Order cannot proceed. Admin inventory shows ${adminStock} ${product.unit || "units"} of ${product.productName}, but ${item.quantity} were ordered.`);
-            }
-        }
-
-        await busy(event.submitter, () => api("/api/pickups", {
-            method: "POST",
-            body: JSON.stringify({
-                customerID: profile?.role === "customer" ? null : ($("pickupCustomerID").value || null),
-                requestedDate, notes, items: pickupFormItems
-            })
-        }), "Submitting Pickup…");
-        event.target.reset();
-        $("pickupDate").min = todayYMD();
-        pickupFormItems = [];
-        renderPickupFormItems(); updateCustomerSelectors(); updateProductSelectors(); syncPickupQuantityLimit();
-        setMessage("pickupMessage", "Pickup request submitted successfully.", "success");
-        await Promise.all([loadPickups(), profile?.role === "customer" ? Promise.resolve() : loadDashboard()]);
-        toast("Pickup request submitted");
-    } catch (error) { setMessage("pickupMessage", error.message); }
+const pickupUi = window.XTechPickupUi.createPickupUi({
+    $, api, toast, setMessage, busy, esc, badge, todayYMD, within, fmtDateTime, fmtDate,
+    validateFutureDate, validateText, validatePositiveWholeNumber, getProfile: () => profile,
+    productById, customerNameFor, itemSummary, ensureFormData, mergeFormItem,
+    updateProductSelectors, updateCustomerSelectors, loadDashboard, loadInventory,
+    loadTransactions, setProducts: value => { products = value; },
+    getPickups: () => pickups, setPickups: value => { pickups = value; },
+    getPickupFormItems: () => pickupFormItems, setPickupFormItems: value => { pickupFormItems = value; },
+    confirm, window
 });
-
-// Changes the status of a pickup request
-window.setPickup = async (id, status) => {
-    const wording = status === "Completed" ? "complete this pickup and deduct its products from inventory" : status === "Cancelled" ? "cancel this pickup request" : "approve this pickup request";
-    if (!confirm(`Are you sure you want to ${wording}?`)) return;
-    try {
-        await api(`/api/pickups/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
-        const reloads = [loadPickups()];
-        if (profile?.role !== "customer") reloads.push(loadInventory(), loadTransactions(), loadDashboard());
-        await Promise.all(reloads);
-        toast(status === "Cancelled" ? "Pickup cancelled" : `Pickup marked ${status}`);
-    } catch (error) { toast(error.message); }
-};
+async function loadCustomers() { return customerUi.loadCustomers(); }
+async function loadPickups() { return pickupUi.loadPickups(); }
 
 // Handles sales records and sale details
 // Loads sales records from the backend

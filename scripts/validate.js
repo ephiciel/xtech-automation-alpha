@@ -26,6 +26,8 @@ const files = [
   "frontend/js/api-client.js",
   "frontend/js/auth-client.js",
   "frontend/js/inventory-ui.js",
+  "frontend/js/customer-ui.js",
+  "frontend/js/pickup-ui.js",
   "frontend/index.html",
   "frontend/css/style.css",
   "worker/index.mjs",
@@ -42,7 +44,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -72,6 +74,8 @@ else pass("required UI elements are present");
 const quantityOnlyFiles = [
   "frontend/index.html",
   "frontend/js/app.js",
+  "frontend/js/customer-ui.js",
+  "frontend/js/pickup-ui.js",
   "backend/xtechManual.js"
 ];
 const disallowedFinancialUi = /(?:₱|\bprice\b|\bpricing\b|\brevenue\b|total amount|estimated total|unit price)/i;
@@ -102,6 +106,18 @@ if (inventoryScriptIndex >= 0 && inventoryScriptIndex < appScriptIndex &&
     /window\.restoreProduct/.test(inventoryScript)) {
   pass("inventory UI extraction keeps product, stock and transaction actions registered");
 } else fail("inventory UI module extraction is incomplete");
+const customerUiJs = fs.readFileSync(path.join(root, "frontend/js/customer-ui.js"), "utf8");
+const pickupUiJs = fs.readFileSync(path.join(root, "frontend/js/pickup-ui.js"), "utf8");
+const customerScriptIndex = html.indexOf('<script src="js/customer-ui.js"></script>');
+const pickupScriptIndex = html.indexOf('<script src="js/pickup-ui.js"></script>');
+if (customerScriptIndex > inventoryScriptIndex && pickupScriptIndex > customerScriptIndex && pickupScriptIndex < appScriptIndex &&
+    /XTechCustomerUi\.createCustomerUi/.test(appJs) && /XTechPickupUi\.createPickupUi/.test(appJs) &&
+    /function loadCustomers\(/.test(customerUiJs) && /window\.editCustomer/.test(customerUiJs) &&
+    /window\.customerHistory/.test(customerUiJs) && /window\.setCustomerStatus/.test(customerUiJs) &&
+    /function loadPickups\(/.test(pickupUiJs) && /window\.setPickup/.test(pickupUiJs) &&
+    /function refreshPickupInventory\(/.test(pickupUiJs) && /window\.removePickupItem/.test(pickupUiJs)) {
+  pass("customer and pickup UI modules retain registration and script ordering");
+} else fail("Stage 4.36 customer/pickup UI extraction is incomplete");
 if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) && /sendPasswordResetEmail/.test(appJs)) {
   pass("V19 login recovery and persistent OTP countdown are present");
 } else {
