@@ -10,7 +10,7 @@ const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
 const $ = id => document.getElementById(id);
 
 // Frontend service modules must load before the UI application starts.
-if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient || !window.XTechAppState || !window.XTechAuthSessionState) {
+if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient || !window.XTechAppState || !window.XTechAuthSessionState || !window.XTechAppLifecycle) {
     throw new Error("XTECH frontend dependencies are missing. Check script loading order.");
 }
 // Stage 4.42: shared operational data remains independent of authentication.
@@ -269,31 +269,29 @@ function showSignedOutState() {
 
 // Stage 4.39: TOTP challenge and enrollment screens are managed by auth-ui.js.
 
-// Starts authentication and loads the app after sign in
-async function boot() {
-    try {
-        const auth = await initFirebase();
-
+// Stage 4.44: the lifecycle module owns startup and Firebase observer dispatch.
+if (!window.XTechAppLifecycle) throw new Error("XTECH application lifecycle is missing. Check script order.");
+const appLifecycle = window.XTechAppLifecycle.createAppLifecycle({
+    prepareAuthScreen: () => {
+        showAuthMode("login", { preserveOtpSession: true });
+        restoreEmailOtpSession();
+    },
+    initFirebase,
+    registerAuthObserver: (auth, notify) =>
         authSessionState.getFirebaseAuthApi().onAuthStateChanged(auth, async user => {
             if (authUiState.authFlowInProgress) return;
-
-            if (!user) {
-                showSignedOutState();
-                return;
-            }
-
-            try {
-                await finishSignedInUser(user);
-            } catch (error) {
-                setMessage("loginMessage", error.message);
-                await authSessionState.getFirebaseAuthApi().signOut(auth);
-            }
-        });
-
-    } catch (error) {
+            await notify(user);
+        }),
+    onSignedIn: finishSignedInUser,
+    onSignedOut: showSignedOutState,
+    onSignedInError: async (error, auth) => {
         setMessage("loginMessage", error.message);
-    }
-}
+        await authSessionState.getFirebaseAuthApi().signOut(auth);
+    },
+    onStartupError: error => setMessage("loginMessage", error.message)
+});
+// Retain the original entry point while preventing duplicate observers.
+async function boot() { return appLifecycle.start(); }
 
 // Stage 4.39: keep theme, session, logout and navigation orchestration in app.js.
 if (!window.XTechAuthUi) throw new Error("XTECH auth UI module is missing. Check script order.");
@@ -446,6 +444,4 @@ const notificationUi = window.XTechNotificationUi.createNotificationUi({
     document, setInterval, clearInterval
 });
 
-showAuthMode("login", { preserveOtpSession: true });
-restoreEmailOtpSession();
 boot();

@@ -63,6 +63,7 @@ jobs:
           frontend/js/app-shell-ui.js
           frontend/js/app-state.js
           frontend/js/auth-session-state.js
+          frontend/js/app-lifecycle.js
 
       - name: Static project validation
         run: npm test
