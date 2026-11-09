@@ -37,6 +37,7 @@ const files = [
   "frontend/js/auth-ui.js",
   "frontend/js/notification-ui.js",
   "frontend/js/ai-assistant-ui.js",
+  "frontend/js/app-shell-ui.js",
   "frontend/index.html",
   "frontend/css/style.css",
   "worker/index.mjs",
@@ -53,7 +54,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "frontend/js/sales-ui.js", "frontend/js/dashboard-ui.js", "frontend/js/reports-ui.js", "frontend/js/staff-ui.js", "frontend/js/security-ui.js", "frontend/js/profile-ui.js", "frontend/js/auth-ui.js", "frontend/js/notification-ui.js", "frontend/js/ai-assistant-ui.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "frontend/js/sales-ui.js", "frontend/js/dashboard-ui.js", "frontend/js/reports-ui.js", "frontend/js/staff-ui.js", "frontend/js/security-ui.js", "frontend/js/profile-ui.js", "frontend/js/auth-ui.js", "frontend/js/notification-ui.js", "frontend/js/ai-assistant-ui.js", "frontend/js/app-shell-ui.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -93,6 +94,7 @@ const quantityOnlyFiles = [
   "frontend/js/auth-ui.js",
   "frontend/js/notification-ui.js",
   "frontend/js/ai-assistant-ui.js",
+  "frontend/js/app-shell-ui.js",
   "backend/xtechManual.js"
 ];
 const disallowedFinancialUi = /(?:₱|\bprice\b|\bpricing\b|\brevenue\b|total amount|estimated total|unit price)/i;
@@ -103,6 +105,22 @@ else pass("quantity-only workflow has no monetary UI text");
 
 const appJs = fs.readFileSync(path.join(root, "frontend/js/app.js"), "utf8");
 const sharedUtilsJs = fs.readFileSync(path.join(root, "frontend/js/shared-utils.js"), "utf8");
+// Stage 4.41: the browser shell is isolated from session/data ownership.
+const appShellJs = fs.readFileSync(path.join(root, "frontend/js/app-shell-ui.js"), "utf8");
+const stage441Order = ["notification-ui.js", "ai-assistant-ui.js", "app-shell-ui.js", "app.js"]
+  .map(file => html.indexOf('<script src="js/' + file + '"></script>'));
+if (stage441Order.every((pos, index) => pos >= 0 && (!index || pos > stage441Order[index - 1])) &&
+    /XTechAppShellUi\.createAppShellUi/.test(appJs) &&
+    ["showSection", "applyRole", "applyTheme", "initTheme", "closeModal"]
+      .every(name => appShellJs.includes("function " + name + "(")) &&
+    /setCurrentSectionName/.test(appShellJs) && /getProfile/.test(appShellJs) &&
+    /hasDashboardCharts/.test(appShellJs) && /modalClose/.test(appShellJs) &&
+    /theme-toggle/.test(appShellJs) &&
+    /function showSection\(/.test(appJs) && /function applyRole\(/.test(appJs) &&
+    /function closeModal\(/.test(appJs)) {
+  pass("app shell extraction retains navigation, role checks, theme and modal wiring");
+} else fail("Stage 4.41 app shell integration is incomplete");
+
 if (html.indexOf('<script src="js/shared-utils.js"></script>') < html.indexOf('<script src="js/app.js"></script>') && html.includes('<script src="js/shared-utils.js"></script>')) pass("shared utilities load before app.js");
 else fail("frontend helper script load order is incorrect");
 const scriptOrder = ["js/shared-utils.js", "js/api-client.js", "js/auth-client.js", "js/app.js"]
