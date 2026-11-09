@@ -51,6 +51,9 @@ jobs:
           frontend/js/inventory-ui.js
           frontend/js/customer-ui.js
           frontend/js/pickup-ui.js
+          frontend/js/sales-ui.js
+          frontend/js/dashboard-ui.js
+          frontend/js/reports-ui.js
 
       - name: Static project validation
         run: npm test
