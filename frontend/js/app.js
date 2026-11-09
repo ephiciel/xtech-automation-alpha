@@ -6,13 +6,8 @@ let products = [];
 let transactions = [];
 let customers = [];
 let pickups = [];
-let sales = [];
 let users = [];
 let pickupFormItems = [];
-let saleFormItems = [];
-let reportCache = null;
-let reportCacheQuery = null;
-let charts = {};
 let pendingRequests = 0;
 let currentSectionName = "dashboard";
 let appConfig = {};
@@ -230,20 +225,6 @@ function mergeFormItem(list, productID, quantity) {
 
 // Inventory product selectors still delegate pickup quantity checks to the pickup UI.
 function syncPickupQuantityLimit() { return pickupUi.syncPickupQuantityLimit(); }
-
-// Displays products and quantities in the current sale
-function renderSaleFormItems() {
-    const container = $("saleItemList");
-    if (!container) return;
-    container.innerHTML = saleFormItems.length ? saleFormItems.map(item => {
-        const product = productById(item.productID);
-        return `<div class="item-row">
-            <div><strong>${esc(product?.productName || item.productID)}</strong><small>${esc(item.productID)} · Available: ${Number(product?.quantity ?? 0)} ${esc(product?.unit || "units")}</small></div>
-            <span><strong>${Number(item.quantity)}</strong> ${esc(product?.unit || "units")}</span>
-            <button type="button" class="small-btn ghost dark-ghost" onclick="removeSaleItem('${esc(item.productID)}')">Remove</button>
-        </div>`;
-    }).join("") : '<div class="empty-state">No products added to this sale yet.</div>';
-}
 
 // Changes the visible page section and loads its data
 function showSection(name) {
@@ -476,7 +457,7 @@ function applyTheme(themeName = "light") {
     });
 
     // Redraws the charts after the theme changes
-    if (token && Object.keys(charts).length) loadDashboard();
+    if (token && dashboardUi.hasCharts()) loadDashboard();
 }
 
 // Returns the current number of unread customer notifications
@@ -1121,80 +1102,15 @@ const pickupUi = window.XTechPickupUi.createPickupUi({
 async function loadCustomers() { return customerUi.loadCustomers(); }
 async function loadPickups() { return pickupUi.loadPickups(); }
 
-// Handles sales records and sale details
-// Loads sales records from the backend
-async function loadSales() {
-    try {
-        const [saleData] = await Promise.all([api("/api/sales"), ensureFormData({ needCustomers: true })]);
-        sales = saleData.sales || [];
-        renderSaleFormItems(); renderSales();
-    } catch (error) { toast(error.message); }
-}
-
-// Filters and displays sales records
-function renderSales() {
-    const search = $("saleSearch").value.trim().toLowerCase();
-    const customerID = $("saleCustomerFilter").value;
-    const status = $("saleStatusFilter").value;
-    const start = $("saleFrom").value;
-    const end = $("saleTo").value;
-    const rows = sales.filter(sale => {
-        const productText = (sale.items || []).map(item => `${item.productName} ${item.productID}`).join(" ");
-        return (!search || `${sale.saleID} ${sale.customerName} ${productText} ${sale.notes || ""}`.toLowerCase().includes(search)) &&
-            (!customerID || sale.customerID === customerID) && (!status || sale.status === status) && within(sale.createdAt, start, end);
-    });
-    $("saleTable").innerHTML = rows.length ? rows.map(sale => `<tr><td>${fmtDateTime(sale.createdAt)}</td><td><strong>${esc(sale.saleID)}</strong></td><td>${esc(sale.customerName || customerNameFor(sale.customerID))}</td><td>${badge(sale.status)}</td><td>${itemSummary(sale.items)}</td><td>${esc(sale.createdByName || "—")}</td><td><button class="small-btn secondary" onclick="viewSale('${esc(sale.id || sale.saleID)}')">View Details</button></td></tr>`).join("") : '<tr><td colspan="7"><div class="table-empty">No sales transactions match the current filters.</div></td></tr>';
-}
-
-["saleSearch", "saleCustomerFilter", "saleStatusFilter", "saleFrom", "saleTo"].forEach(id => $(id).addEventListener("input", renderSales));
-
-$("addSaleItem").addEventListener("click", () => {
-    const productID = $("saleProduct").value;
-    const quantity = Number($("saleQuantity").value);
-    const product = productById(productID);
-    if (!product) return toast("Select a product first.");
-    try {
-        validatePositiveWholeNumber(quantity, "Sale quantity");
-    } catch (error) {
-        return toast(error.message);
-    }
-    const existing = saleFormItems.find(item => item.productID === productID);
-    if (quantity + (existing?.quantity || 0) > Number(product.quantity)) return toast(`Only ${product.quantity} ${product.unit || "units"} of ${product.productName} are currently available.`);
-    mergeFormItem(saleFormItems, productID, quantity);
-    $("saleQuantity").value = "1";
-    renderSaleFormItems();
+// Stage 4.37: register sales handlers, preserving existing API and shared refresh functions.
+if (!window.XTechSalesUi) throw new Error("XTECH sales UI module is missing. Check script order.");
+const salesUi = window.XTechSalesUi.createSalesUi({
+    $, api, toast, setMessage, busy, esc, badge, within, fmtDateTime, customerNameFor,
+    itemSummary, productById, validatePositiveWholeNumber, mergeFormItem, validateText,
+    updateCustomerSelectors, updateProductSelectors, loadInventory, loadTransactions, loadDashboard,
+    ensureFormData, confirm, window
 });
-
-// Removes a product from the current sale
-window.removeSaleItem = productID => { saleFormItems = saleFormItems.filter(item => item.productID !== productID); renderSaleFormItems(); };
-
-$("saleForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("saleMessage", "");
-    if (!saleFormItems.length) return setMessage("saleMessage", "Add at least one product before confirming the sale.");
-    try {
-        const notes = validateText($("saleNotes").value, "Sale notes", 500);
-        if (!confirm("Confirm this sale? Inventory will be deducted immediately.")) return;
-
-        const data = await busy(event.submitter, () => api("/api/sales", {
-            method: "POST",
-            body: JSON.stringify({ customerID: $("saleCustomerID").value || null, items: saleFormItems, notes })
-        }), "Recording Sale…");
-        event.target.reset(); saleFormItems = []; renderSaleFormItems(); updateCustomerSelectors(); updateProductSelectors();
-        setMessage("saleMessage", `Sale ${data.sale.saleID} recorded successfully.`, "success");
-        await Promise.all([loadSales(), loadInventory(), loadTransactions(), loadDashboard()]);
-        toast("Sale recorded successfully");
-    } catch (error) { setMessage("saleMessage", error.message); }
-});
-
-// Opens the details of a selected sale
-window.viewSale = id => {
-    const sale = sales.find(item => item.id === id || item.saleID === id);
-    if (!sale) return;
-    const rows = (sale.items || []).map(item => `<tr><td>${esc(item.productName)}</td><td>${esc(item.productID)}</td><td>${Number(item.quantity)}</td></tr>`).join("");
-    $("modalBody").innerHTML = `<h2>Sale Details</h2><div class="detail-grid"><div><span>Sale Reference</span><strong>${esc(sale.saleID)}</strong></div><div><span>Date & Time</span><strong>${fmtDateTime(sale.createdAt)}</strong></div><div><span>Customer</span><strong>${esc(sale.customerName || customerNameFor(sale.customerID))}</strong></div><div><span>Status</span><strong>${esc(sale.status)}</strong></div><div><span>Processed By</span><strong>${esc(sale.createdByName || "—")}</strong></div></div><h3>Products Sold</h3><div class="table-wrap"><table><thead><tr><th>Product</th><th>Product ID</th><th>Quantity</th></tr></thead><tbody>${rows}</tbody></table></div><h3>Notes</h3><p>${esc(sale.notes || "No notes recorded.")}</p>`;
-    $("modal").classList.remove("hidden");
-};
+async function loadSales() { return salesUi.loadSales(); }
 
 // Handles staff accounts and account status
 // Loads staff accounts from the backend
@@ -1391,386 +1307,26 @@ $("profileForm").addEventListener("submit", async event => {
     } catch (error) { setMessage("profileMessage", error.message); }
 });
 
-// Loads dashboard totals, low-stock products, and chart data
-async function loadDashboard() {
-    try {
-        const data = await api("/api/dashboard");
-        $("mProducts").textContent = data.metrics.totalProducts;
-        $("mLow").textContent = data.metrics.lowStock;
-        $("mCustomers").textContent = data.metrics.customers;
-        $("mPickups").textContent = data.metrics.pendingPickups;
-        $("mSales").textContent = data.metrics.totalSales;
-        $("mUnitsSold").textContent = Number(data.metrics.totalUnitsSold || 0).toLocaleString();
-        drawCharts(data);
-
-        $("dashboardLowStock").innerHTML = data.lowStockProducts.length ? data.lowStockProducts.map(product => `<tr><td>${esc(product.productName)}</td><td>${Number(product.quantity)} ${esc(product.unit || "")}</td><td>${Number(product.reorderLevel)}</td><td>${badge(stockStatus(product))}</td></tr>`).join("") : '<tr><td colspan="4">No low-stock products.</td></tr>';
-    } catch (error) { toast(error.message); }
-}
-
-// Draws the inventory, pickup, and sales charts
-function drawCharts(data) {
-    Object.values(charts).forEach(chart => chart?.destroy());
-    charts = {};
-
-    const darkMode = document.body.classList.contains("dark");
-    const textColor = darkMode ? "#cbd5e1" : "#475569";
-    const gridColor = darkMode ? "rgba(148, 163, 184, 0.12)" : "rgba(148, 163, 184, 0.20)";
-    const blue = darkMode ? "#60a5fa" : "#2563eb";
-    const purple = darkMode ? "#a78bfa" : "#7c3aed";
-    const green = darkMode ? "#4ade80" : "#16a34a";
-
-    const commonScales = {
-        x: { grid: { display: false }, ticks: { color: textColor, maxRotation: 0, autoSkip: true } },
-        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } }
-    };
-    const commonPlugins = {
-        legend: { labels: { color: textColor, boxWidth: 12, usePointStyle: true } }
-    };
-
-    charts.inventory = new Chart($("inventoryChart"), {
-        type: "bar",
-        data: {
-            labels: data.inventory.map(item => item.name),
-            datasets: [{
-                label: "Quantity in Stock",
-                data: data.inventory.map(item => item.quantity),
-                backgroundColor: darkMode ? "rgba(96, 165, 250, 0.55)" : "rgba(37, 99, 235, 0.72)",
-                borderColor: blue,
-                borderWidth: 1,
-                borderRadius: 6,
-                maxBarThickness: 42
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, plugins: commonPlugins, scales: commonScales }
-    });
-
-    charts.pickups = new Chart($("pickupChart"), {
-        type: "line",
-        data: {
-            labels: data.weeklyPickups.map(item => item.date),
-            datasets: [{
-                label: "Pickup Requests",
-                data: data.weeklyPickups.map(item => item.count),
-                borderColor: purple,
-                backgroundColor: darkMode ? "rgba(167, 139, 250, 0.12)" : "rgba(124, 58, 237, 0.10)",
-                pointBackgroundColor: purple,
-                pointRadius: 3,
-                pointHoverRadius: 5,
-                tension: 0.35,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: commonPlugins,
-            scales: {
-                x: commonScales.x,
-                y: { ...commonScales.y, ticks: { ...commonScales.y.ticks, precision: 0 } }
-            }
-        }
-    });
-
-    charts.sales = new Chart($("salesChart"), {
-        type: "line",
-        data: {
-            labels: data.weeklySales.map(item => item.date),
-            datasets: [{
-                label: "Units Sold",
-                data: data.weeklySales.map(item => item.unitsSold),
-                borderColor: green,
-                backgroundColor: darkMode ? "rgba(74, 222, 128, 0.10)" : "rgba(22, 163, 74, 0.09)",
-                pointBackgroundColor: green,
-                pointRadius: 3,
-                pointHoverRadius: 5,
-                tension: 0.35,
-                fill: true
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, plugins: commonPlugins, scales: commonScales }
-    });
-}
-
-$("refreshDashboard").addEventListener("click", loadDashboard);
-
-// Builds, displays, prints, and exports reports
-// Builds the selected report date range for API requests
-function reportQuery() {
-    const start = $("reportStart").value;
-    const end = $("reportEnd").value;
-    if (start && end && start > end) throw new Error("Report start date cannot be after the end date.");
-    const params = new URLSearchParams();
-    if (start) params.set("start", start);
-    if (end) params.set("end", end);
-    return params.toString();
-}
-
-// Loads report data and summary totals
-async function loadReports() {
-    try {
-        const query = reportQuery();
-        reportCache = await api(`/api/reports/summary${query ? `?${query}` : ""}`);
-        reportCacheQuery = query;
-        $("rProducts").textContent = reportCache.metrics.totalProducts;
-        $("rLow").textContent = reportCache.metrics.lowStock;
-        $("rCustomers").textContent = reportCache.metrics.activeCustomers;
-        $("rSales").textContent = reportCache.metrics.sales;
-        $("rUnitsSold").textContent = Number(reportCache.metrics.unitsSold || 0).toLocaleString();
-        $("rPickups").textContent = reportCache.metrics.pickups;
-        $("reportGeneratedAt").textContent = `Generated ${fmtDateTime(reportCache.generatedAt)}`;
-        const start = reportCache.period.start;
-        const end = reportCache.period.end;
-        $("reportPeriodLabel").textContent = start || end
-            ? `Reporting period: ${start ? fmtDate(start) : "Beginning"} to ${end ? fmtDate(end) : "Present"}`
-            : "Reporting period: All available records / current inventory";
-        renderReportTable();
-        return reportCache;
-    } catch (error) {
-        toast(error.message);
-        return null;
-    }
-}
-
-// Reloads reports when the date filters changed after the last generation
-async function ensureCurrentReportData() {
-    const query = reportQuery();
-    if (!reportCache || reportCacheQuery !== query) {
-        const loaded = await loadReports();
-        if (!loaded) throw new Error("Generate the report before exporting or printing.");
-    }
-    return reportCache;
-}
-
-// Converts report data into table headings and rows
-function reportTableRows(type) {
-    if (!reportCache) return { title: "Report", headers: [], rows: [] };
-    if (type === "inventory") return {
-        title: "Inventory Report",
-        headers: ["Product ID", "Product Name", "Category", "Unit", "Quantity", "Reorder Level", "Stock Status"],
-        rows: reportCache.inventory.map(item => [item.productID, item.productName, item.category, item.unit || "—", item.quantity, item.reorderLevel, stockStatus(item)])
-    };
-    if (type === "transactions") return {
-        title: "Stock Movement Report",
-        headers: ["Date & Time", "Movement Type", "Product", "Quantity Changed", "Stock Before", "Stock After", "Reason / Reference", "Performed By"],
-        rows: reportCache.transactions.map(item => [fmtDateTime(item.createdAt), movementTypeLabel(item.type), `${item.productName} (${item.productID})`, `${["STOCK_IN", "INITIAL_STOCK"].includes(item.type) ? "+" : "−"}${item.quantity}`, item.previousQuantity, item.newQuantity, item.reason || "—", item.performedBy || "System"])
-    };
-    if (type === "sales") return {
-        title: "Sales Report",
-        headers: ["Date & Time", "Sale Reference", "Customer", "Status", "Products / Quantity", "Processed By"],
-        rows: reportCache.sales.map(item => [fmtDateTime(item.createdAt), item.saleID, item.customerName || "Walk-in / No registered customer", item.status, (item.items || []).map(product => `${product.productName || product.productID} × ${Number(product.quantity)}`).join("; ") || "—", item.createdByName || "—"])
-    };
-    return {
-        title: "Pickup Report",
-        headers: ["Request Date & Time", "Pickup Reference", "Customer", "Requested Pickup Date", "Status", "Notes"],
-        rows: reportCache.pickups.map(item => [fmtDateTime(item.createdAt), item.pickupID, item.customerName || "Walk-in / No registered customer", fmtDate(item.requestedDate), item.status, item.notes || "—"])
-    };
-}
-
-// Displays the currently selected report table
-function renderReportTable() {
-    const model = reportTableRows($("reportType").value);
-    $("reportTableTitle").textContent = model.title;
-    $("reportRowCount").textContent = `${model.rows.length.toLocaleString()} ${model.rows.length === 1 ? "row" : "rows"}`;
-    $("reportTableHead").innerHTML = `<tr>${model.headers.map(header => `<th>${esc(header)}</th>`).join("")}</tr>`;
-    $("reportTableBody").innerHTML = model.rows.length
-        ? model.rows.map(row => `<tr>${row.map(value => `<td>${esc(value)}</td>`).join("")}</tr>`).join("")
-        : `<tr><td colspan="${model.headers.length || 1}"><div class="table-empty">No records are available for this report and date range.</div></td></tr>`;
-}
-
-// Builds summary values that are useful for the selected report
-function reportPrintSummary(type) {
-    if (!reportCache) return [];
-
-    if (type === "inventory") {
-        const totalStock = reportCache.inventory.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-        const categories = new Set(reportCache.inventory.map(item => item.category).filter(Boolean)).size;
-        return [
-            ["Active Products", reportCache.inventory.length.toLocaleString()],
-            ["Current Total Stock", totalStock.toLocaleString()],
-            ["Low / Out of Stock", reportCache.lowStock.length.toLocaleString()],
-            ["Categories", categories.toLocaleString()]
-        ];
-    }
-
-    if (type === "transactions") {
-        const addedTypes = new Set(["STOCK_IN", "INITIAL_STOCK"]);
-        const removedTypes = new Set(["STOCK_OUT", "PICKUP_OUT", "SALE_OUT"]);
-        const added = reportCache.transactions.filter(item => addedTypes.has(item.type)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-        const removed = reportCache.transactions.filter(item => removedTypes.has(item.type)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-        return [
-            ["Movements", reportCache.transactions.length.toLocaleString()],
-            ["Stock Added", added.toLocaleString()],
-            ["Stock Removed", removed.toLocaleString()],
-            ["Net Change", (added - removed).toLocaleString()]
-        ];
-    }
-
-    if (type === "sales") {
-        const confirmed = reportCache.sales.filter(item => item.status === "Confirmed");
-        const unitsSold = confirmed.reduce((sum, sale) => sum + (sale.items || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0), 0);
-        const productIDs = new Set(confirmed.flatMap(sale => (sale.items || []).map(item => item.productID)).filter(Boolean));
-        return [
-            ["Sales Transactions", reportCache.sales.length.toLocaleString()],
-            ["Confirmed Sales", confirmed.length.toLocaleString()],
-            ["Units Sold", unitsSold.toLocaleString()],
-            ["Distinct Products Sold", productIDs.size.toLocaleString()]
-        ];
-    }
-
-    const countStatus = status => reportCache.pickups.filter(item => item.status === status).length;
-    return [
-        ["Pickup Requests", reportCache.pickups.length.toLocaleString()],
-        ["Pending", countStatus("Pending").toLocaleString()],
-        ["Completed", countStatus("Completed").toLocaleString()],
-        ["Cancelled", countStatus("Cancelled").toLocaleString()]
-    ];
-}
-
-// Returns the date range text used by the clean print view
-function reportPrintPeriod(type) {
-    if (type === "inventory") return "Current inventory snapshot";
-    const start = reportCache?.period?.start;
-    const end = reportCache?.period?.end;
-    if (!start && !end) return "All available records";
-    return `${start ? fmtDate(start) : "Beginning"} to ${end ? fmtDate(end) : "Present"}`;
-}
-
-// Opens a report-only print document so the browser can print it or save it as PDF
-function printCurrentReport() {
-    const type = $("reportType").value;
-    const model = reportTableRows(type);
-    const summary = reportPrintSummary(type);
-    const generatedBy = profile?.name || currentUser?.displayName || currentUser?.email || "XTECH user";
-    const generatedAt = fmtDateTime(reportCache?.generatedAt || new Date().toISOString());
-    const period = reportPrintPeriod(type);
-    const orientation = ["inventory", "transactions"].includes(type) ? "landscape" : "portrait";
-    const safeTitle = `${model.title} - XTECH Automation`;
-    const tableBody = model.rows.length
-        ? model.rows.map(row => `<tr>${row.map(value => `<td>${esc(value)}</td>`).join("")}</tr>`).join("")
-        : `<tr><td colspan="${model.headers.length || 1}" class="empty">No records are available for this report and date range.</td></tr>`;
-
-    const frame = document.createElement("iframe");
-    frame.className = "report-print-frame";
-    frame.setAttribute("aria-hidden", "true");
-    document.body.appendChild(frame);
-
-    const printDocument = frame.contentDocument;
-    printDocument.open();
-    printDocument.write(`<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>${esc(safeTitle)}</title>
-<style>
-  @page { size: ${orientation}; margin: 12mm; }
-  * { box-sizing: border-box; }
-  body { margin: 0; color: #111827; background: #fff; font-family: Arial, Helvetica, sans-serif; font-size: 10px; line-height: 1.4; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; padding-bottom: 12px; border-bottom: 2px solid #2563eb; }
-  .brand { margin: 0; font-size: 19px; font-weight: 800; }
-  .brand span { color: #2563eb; }
-  .company { margin: 3px 0 0; color: #4b5563; font-size: 10px; }
-  .meta { min-width: 220px; text-align: right; color: #4b5563; font-size: 9px; }
-  .meta strong { color: #111827; }
-  .report-heading { margin: 18px 0 4px; font-size: 17px; }
-  .period { margin: 0 0 13px; color: #4b5563; }
-  .summary { display: grid; grid-template-columns: repeat(${Math.min(4, Math.max(1, summary.length))}, 1fr); gap: 8px; margin-bottom: 14px; }
-  .summary-item { padding: 9px 10px; border: 1px solid #d1d5db; border-radius: 7px; background: #f9fafb; }
-  .summary-item span { display: block; margin-bottom: 3px; color: #6b7280; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-  .summary-item strong { font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; table-layout: auto; }
-  thead { display: table-header-group; }
-  tr { break-inside: avoid; page-break-inside: avoid; }
-  th, td { padding: 6px 6px; border: 1px solid #d1d5db; vertical-align: top; overflow-wrap: anywhere; }
-  th { background: #eef2f7; font-size: 8.5px; text-align: left; font-weight: 800; }
-  td { font-size: 8.5px; }
-  tbody tr:nth-child(even) td { background: #fafafa; }
-  .empty { padding: 22px; text-align: center; color: #6b7280; }
-  .footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #d1d5db; display: flex; justify-content: space-between; gap: 16px; color: #6b7280; font-size: 8px; }
-  @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-</style>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <h1 class="brand">XTECH <span>Automation</span></h1>
-      <p class="company">AGB XTECH Industrial Sales</p>
-    </div>
-    <div class="meta">
-      <div><strong>Generated:</strong> ${esc(generatedAt)}</div>
-      <div><strong>Generated by:</strong> ${esc(generatedBy)}</div>
-      <div><strong>Rows:</strong> ${model.rows.length.toLocaleString()}</div>
-    </div>
-  </div>
-  <h2 class="report-heading">${esc(model.title)}</h2>
-  <p class="period">${esc(period)}</p>
-  <div class="summary">
-    ${summary.map(([label, value]) => `<div class="summary-item"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("")}
-  </div>
-  <table>
-    <thead><tr>${model.headers.map(header => `<th>${esc(header)}</th>`).join("")}</tr></thead>
-    <tbody>${tableBody}</tbody>
-  </table>
-  <div class="footer">
-    <span>Generated by XTECH Automation</span>
-    <span>${esc(model.title)} - ${esc(period)}</span>
-  </div>
-</body>
-</html>`);
-    printDocument.close();
-
-    const cleanup = () => setTimeout(() => frame.remove(), 500);
-    frame.contentWindow.onafterprint = cleanup;
-    setTimeout(() => {
-        frame.contentWindow.focus();
-        frame.contentWindow.print();
-        setTimeout(() => { if (frame.isConnected) frame.remove(); }, 60000);
-    }, 150);
-}
-
-$("refreshReports").addEventListener("click", loadReports);
-$("reportType").addEventListener("change", renderReportTable);
-$("clearReportDates").addEventListener("click", () => { $("reportStart").value = ""; $("reportEnd").value = ""; loadReports(); });
-
-$("exportCurrentCsv").addEventListener("click", async () => {
-    try {
-        await ensureCurrentReportData();
-        const type = $("reportType").value;
-        const query = reportQuery();
-        pendingRequests++;
-        updateLoading();
-        const response = await fetch(`/api/reports/csv/${type}${query ? `?${query}` : ""}`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!response.ok) {
-            const errorBody = await response.json().catch(() => null);
-            const message = errorBody?.message || "Export failed.";
-
-            throw new Error(message);
-        }
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = `xtech-${type}-report.csv`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(url);
-        toast("Current report exported as CSV");
-    } catch (error) {
-        toast(error.message);
-    } finally {
-        pendingRequests = Math.max(0, pendingRequests - 1);
-        updateLoading();
-    }
+// Stage 4.37: dashboard owns its Chart.js instances and refresh action.
+if (!window.XTechDashboardUi) throw new Error("XTECH dashboard UI module is missing. Check script order.");
+const dashboardUi = window.XTechDashboardUi.createDashboardUi({
+    $, api, toast, esc, badge, stockStatus, document,
+    makeChart: (element, options) => new Chart(element, options)
 });
+async function loadDashboard() { return dashboardUi.loadDashboard(); }
 
-$("printReport").addEventListener("click", async () => {
-    try {
-        await ensureCurrentReportData();
-        printCurrentReport();
-    } catch (error) {
-        toast(error.message);
-    }
+// Stage 4.37: reports maintain a private cache and share the app's loading counter.
+if (!window.XTechReportsUi) throw new Error("XTECH reports UI module is missing. Check script order.");
+const reportsUi = window.XTechReportsUi.createReportsUi({
+    $, api, toast, esc, fmtDateTime, fmtDate, stockStatus, movementTypeLabel,
+    getProfile: () => profile, getCurrentUser: () => currentUser, getToken: () => token,
+    onPendingChange: delta => {
+        pendingRequests = Math.max(0, pendingRequests + delta);
+        updateLoading();
+    },
+    document, fetch: (...args) => fetch(...args), URL, URLSearchParams, setTimeout
 });
+async function loadReports() { return reportsUi.loadReports(); }
 
 // Handles the XTECH AI chat and each user's saved history
 const CHAT_GREETING = "Hello! I’m the XTECH Help Assistant. I can guide you through the page you’re viewing or answer questions about XTECH features.";
