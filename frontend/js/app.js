@@ -6,7 +6,6 @@ let products = [];
 let transactions = [];
 let customers = [];
 let pickups = [];
-let users = [];
 let pickupFormItems = [];
 let pendingRequests = 0;
 let currentSectionName = "dashboard";
@@ -29,8 +28,6 @@ let emailOtpResendAvailableAt = 0;
 let emailOtpExpiresAt = 0;
 let emailOtpCountdownTimer = null;
 const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
-let pendingPasswordChangeMfaResolver = null;
-let pendingPasswordChangeMfaHint = null;
 
 // Finds an element by its ID
 const $ = id => document.getElementById(id);
@@ -1112,200 +1109,33 @@ const salesUi = window.XTechSalesUi.createSalesUi({
 });
 async function loadSales() { return salesUi.loadSales(); }
 
-// Handles staff accounts and account status
-// Loads staff accounts from the backend
-async function loadUsers() {
-    try {
-        const data = await api("/api/users");
-        users = data.users || [];
-        renderUsers();
-    } catch (error) { toast(error.message); }
-}
-
-// Filters and displays staff accounts
-function renderUsers() {
-    const search = $("userSearch").value.trim().toLowerCase();
-    const status = $("userStatusFilter").value;
-    const rows = users.filter(user => {
-        const active = user.active !== false;
-        return (!search || `${user.name} ${user.email} ${roleDisplayName(user.role)}`.toLowerCase().includes(search)) && (!status || (status === "active" ? active : !active));
-    });
-    $("userTable").innerHTML = rows.length ? rows.map(user => {
-        const active = user.active !== false;
-        const isSelf = user.uid === currentUser?.uid;
-        return `<tr><td><strong>${esc(user.name || "—")}</strong></td><td>${esc(user.email || "—")}</td><td>${esc(roleDisplayName(user.role))}</td><td>${badge(active ? "Active" : "Inactive")}</td><td>${isSelf ? "Current account" : `<button class="small-btn ghost dark-ghost" onclick="setUserStatus('${esc(user.uid || user.id)}', ${!active})">${active ? "Deactivate" : "Activate"}</button>`}</td></tr>`;
-    }).join("") : '<tr><td colspan="5"><div class="table-empty">No user accounts match the current filters.</div></td></tr>';
-}
-
-["userSearch", "userStatusFilter"].forEach(id => $(id).addEventListener("input", renderUsers));
-$("refreshUsers").addEventListener("click", loadUsers);
-
-$("userForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("userMessage", "");
-    try {
-        const name = validateName($("userName").value, "Staff name");
-        const email = validateEmail($("userAccountEmail").value);
-        const password = validatePassword($("userPassword").value);
-        const role = $("userRole").value;
-        if (!["secretary", "warehouse"].includes(role)) validationError("Select a valid staff role.");
-
-        await busy(event.submitter, () => api("/api/users", {
-            method: "POST",
-            body: JSON.stringify({ name, email, password, role })
-        }), "Creating Account…");
-        event.target.reset();
-        setMessage("userMessage", "Staff account created successfully.", "success");
-        await loadUsers(); toast("Staff account created");
-    } catch (error) { setMessage("userMessage", error.message); }
+// Stage 4.38: isolated staff account UI; app.js retains session ownership.
+if (!window.XTechStaffUi) throw new Error("XTECH staff UI module is missing. Check script order.");
+const staffUi = window.XTechStaffUi.createStaffUi({
+    $, api, toast, setMessage, busy, esc, badge, roleDisplayName,
+    validateName, validateEmail, validatePassword, validationError,
+    getCurrentUser: () => currentUser, confirm, window
 });
+async function loadUsers() { return staffUi.loadUsers(); }
 
-// Activates or deactivates a staff account
-window.setUserStatus = async (uid, active) => {
-    if (!confirm(`${active ? "Activate" : "Deactivate"} this staff account?`)) return;
-    try {
-        await api(`/api/users/${encodeURIComponent(uid)}/status`, { method: "PATCH", body: JSON.stringify({ active }) });
-        await loadUsers(); toast(`Account ${active ? "activated" : "deactivated"}`);
-    } catch (error) { toast(error.message); }
-};
-
-// Loads account and MFA details shown on the Account & Security page
-function loadSecurity() {
-    if (!currentUser || !firebaseAuthApi) return;
-
-    $("securityEmail").textContent = currentUser.email || "—";
-    $("securityRole").textContent = roleDisplayName(profile?.role || "customer");
-
-    const factors = firebaseAuthApi.multiFactor(currentUser).enrolledFactors || [];
-    const hasTotp = factors.some(factor => factor.factorId === firebaseAuthApi.TotpMultiFactorGenerator.FACTOR_ID);
-    $("securityMfaStatus").textContent = hasTotp ? "Authenticator enabled" : "Not enabled";
-    $("securityEmailOtpStatus").textContent = currentUser.email ? "Available" : "Unavailable";
-
-    const lastSignIn = currentUser.metadata?.lastSignInTime;
-    $("securityLastSignIn").textContent = lastSignIn ? new Date(lastSignIn).toLocaleString() : "—";
-}
-
-// Clears any unfinished Authenticator verification for a password change
-function resetPasswordChangeMfa() {
-    pendingPasswordChangeMfaResolver = null;
-    pendingPasswordChangeMfaHint = null;
-    $("changePasswordTotpWrap")?.classList.add("hidden");
-    if ($("changePasswordTotpCode")) $("changePasswordTotpCode").value = "";
-}
-
-// Sends a Firebase password-reset link to the signed-in account
-$("sendResetPasswordBtn").addEventListener("click", async event => {
-    setMessage("securityResetMessage", "");
-    try {
-        if (!currentUser?.email) validationError("This account does not have an email address.");
-        await busy(event.currentTarget, () => firebaseAuthApi.sendPasswordResetEmail(firebaseAuthInstance, currentUser.email), "Sending…");
-        setMessage("securityResetMessage", `Password reset email sent to ${currentUser.email}.`, "success");
-    } catch (error) {
-        setMessage("securityResetMessage", error.message || "Could not send the password reset email.");
-    }
+// Stage 4.38: account security uses fresh authentication state via getters.
+if (!window.XTechSecurityUi) throw new Error("XTECH security UI module is missing. Check script order.");
+const securityUi = window.XTechSecurityUi.createSecurityUi({
+    $, toast, setMessage, busy, roleDisplayName, validationError,
+    validateText, validateNewPassword,
+    getCurrentUser: () => currentUser, getProfile: () => profile,
+    getFirebaseAuthApi: () => firebaseAuthApi, getFirebaseAuthInstance: () => firebaseAuthInstance
 });
+function loadSecurity() { return securityUi.loadSecurity(); }
+function resetPasswordChangeMfa() { return securityUi.resetPasswordChangeMfa(); }
 
-// Verifies the current password, optional TOTP code, then changes the Firebase password
-$("changePasswordForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("changePasswordMessage", "");
-
-    try {
-        if (!currentUser?.email) validationError("This account does not have an email address.");
-
-        const currentPassword = validateText($("currentPassword").value, "Current password", 128, true);
-        const newPassword = validateNewPassword($("newPassword").value);
-        const confirmPassword = String($("confirmNewPassword").value || "");
-
-        if (newPassword !== confirmPassword) validationError("New password and confirmation do not match.");
-        if (newPassword === currentPassword) validationError("Your new password must be different from your current password.");
-
-        // If Firebase already requested MFA, verify that code and continue the password change.
-        if (pendingPasswordChangeMfaResolver && pendingPasswordChangeMfaHint) {
-            const code = String($("changePasswordTotpCode").value || "").trim();
-            if (!/^\d{6}$/.test(code)) validationError("Enter the 6-digit code from your authenticator app.");
-
-            const assertion = firebaseAuthApi.TotpMultiFactorGenerator.assertionForSignIn(pendingPasswordChangeMfaHint.uid, code);
-            await busy(event.submitter, () => pendingPasswordChangeMfaResolver.resolveSignIn(assertion), "Verifying…");
-            resetPasswordChangeMfa();
-        } else {
-            // Re-sign in with the current password so Firebase treats this as a recent, security-sensitive login.
-            try {
-                await firebaseAuthApi.signInWithEmailAndPassword(firebaseAuthInstance, currentUser.email, currentPassword);
-            } catch (error) {
-                if (error.code !== "auth/multi-factor-auth-required") throw error;
-
-                pendingPasswordChangeMfaResolver = firebaseAuthApi.getMultiFactorResolver(firebaseAuthInstance, error);
-                pendingPasswordChangeMfaHint = pendingPasswordChangeMfaResolver.hints.find(
-                    hint => hint.factorId === firebaseAuthApi.TotpMultiFactorGenerator.FACTOR_ID
-                );
-
-                if (!pendingPasswordChangeMfaHint) {
-                    resetPasswordChangeMfa();
-                    validationError("This account requires an unsupported multi-factor method.");
-                }
-
-                $("changePasswordTotpWrap").classList.remove("hidden");
-                $("changePasswordTotpCode").focus();
-                setMessage("changePasswordMessage", "Current password verified. Enter your 6-digit Authenticator code to continue.", "success");
-                return;
-            }
-        }
-
-        const user = firebaseAuthInstance.currentUser;
-        if (!user) validationError("Your authentication session expired. Sign in again.");
-
-        await busy(event.submitter, () => firebaseAuthApi.updatePassword(user, newPassword), "Changing…");
-        $("changePasswordForm").reset();
-        resetPasswordChangeMfa();
-        toast("Password changed successfully");
-
-        // Require a fresh sign-in using the new password after the change.
-        await firebaseAuthApi.signOut(firebaseAuthInstance);
-        setMessage("loginMessage", "Password changed successfully. Sign in again using your new password.", "success");
-    } catch (error) {
-        const friendly = ({
-            "auth/invalid-credential": "The current password is incorrect.",
-            "auth/wrong-password": "The current password is incorrect.",
-            "auth/weak-password": "The new password is too weak.",
-            "auth/requires-recent-login": "Please sign out, sign in again, and retry the password change."
-        })[error.code] || error.message || "Could not change the password.";
-        setMessage("changePasswordMessage", friendly);
-    }
+// Stage 4.38: customer profile UI; API and authenticated session remain shared.
+if (!window.XTechProfileUi) throw new Error("XTECH profile UI module is missing. Check script order.");
+const profileUi = window.XTechProfileUi.createProfileUi({
+    $, api, toast, setMessage, busy, validateName, validatePhone, validateText,
+    getCurrentUser: () => currentUser
 });
-
-// Loads and updates the customer's profile
-// Loads the signed-in customer's profile
-async function loadProfile() {
-    try {
-        const data = await api("/api/profile");
-        const customer = data.customer;
-        $("profileName").value = customer.name || "";
-        $("profileEmail").value = customer.email || currentUser?.email || "";
-        $("profilePhone").value = customer.phone || "";
-        $("profileCompany").value = customer.company || "";
-        $("profileAddress").value = customer.address || "";
-        setMessage("profileMessage", "");
-    } catch (error) { setMessage("profileMessage", error.message); }
-}
-
-$("profileForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("profileMessage", "");
-    try {
-        const name = validateName($("profileName").value, "Full name");
-        const phone = validatePhone($("profilePhone").value);
-        const company = validateText($("profileCompany").value, "Company / Organization", 120);
-        const address = validateText($("profileAddress").value, "Address", 250);
-
-        await busy(event.submitter, () => api("/api/profile", {
-            method: "PUT",
-            body: JSON.stringify({ name, phone, company, address })
-        }), "Saving Profile…");
-        setMessage("profileMessage", "Profile updated successfully.", "success");
-        toast("Profile updated");
-    } catch (error) { setMessage("profileMessage", error.message); }
-});
+async function loadProfile() { return profileUi.loadProfile(); }
 
 // Stage 4.37: dashboard owns its Chart.js instances and refresh action.
 if (!window.XTechDashboardUi) throw new Error("XTECH dashboard UI module is missing. Check script order.");
