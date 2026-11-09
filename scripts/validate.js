@@ -36,6 +36,7 @@ const files = [
   "frontend/js/profile-ui.js",
   "frontend/js/auth-ui.js",
   "frontend/js/notification-ui.js",
+  "frontend/js/ai-assistant-ui.js",
   "frontend/index.html",
   "frontend/css/style.css",
   "worker/index.mjs",
@@ -52,7 +53,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "frontend/js/sales-ui.js", "frontend/js/dashboard-ui.js", "frontend/js/reports-ui.js", "frontend/js/staff-ui.js", "frontend/js/security-ui.js", "frontend/js/profile-ui.js", "frontend/js/auth-ui.js", "frontend/js/notification-ui.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "frontend/js/sales-ui.js", "frontend/js/dashboard-ui.js", "frontend/js/reports-ui.js", "frontend/js/staff-ui.js", "frontend/js/security-ui.js", "frontend/js/profile-ui.js", "frontend/js/auth-ui.js", "frontend/js/notification-ui.js", "frontend/js/ai-assistant-ui.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -91,6 +92,7 @@ const quantityOnlyFiles = [
   "frontend/js/profile-ui.js",
   "frontend/js/auth-ui.js",
   "frontend/js/notification-ui.js",
+  "frontend/js/ai-assistant-ui.js",
   "backend/xtechManual.js"
 ];
 const disallowedFinancialUi = /(?:₱|\bprice\b|\bpricing\b|\brevenue\b|total amount|estimated total|unit price)/i;
@@ -337,6 +339,21 @@ if (/RESEND_API_KEY=/.test(envExample) && !/SMTP_HOST=/.test(envExample)) {
 } else {
   fail(".env.example must use RESEND_API_KEY and not require SMTP settings");
 }
+
+const aiAssistantUiJs = fs.readFileSync(path.join(root, "frontend/js/ai-assistant-ui.js"), "utf8");
+const stage440ScriptOrder = ["notification-ui.js", "ai-assistant-ui.js", "app.js"]
+  .map(file => html.indexOf('<script src="js/' + file + '"></script>'));
+if (stage440ScriptOrder.every((position,index) => position >= 0 && (!index || position > stage440ScriptOrder[index-1])) &&
+    /XTechAiAssistantUi\.createAiAssistantUi/.test(appJs) &&
+    /getCurrentUser: \(\) => currentUser/.test(appJs) &&
+    /getCurrentSectionName: \(\) => currentSectionName/.test(appJs) &&
+    /function renderAssistantMarkdown\(/.test(aiAssistantUiJs) &&
+    /function loadChatHistory\(/.test(aiAssistantUiJs) &&
+    /\/api\/chat\/history/.test(aiAssistantUiJs) &&
+    /\/api\/chat/.test(aiAssistantUiJs) &&
+    /function resetChatPanel\(/.test(aiAssistantUiJs)) {
+  pass("AI Assistant UI extraction preserves chat, history and script ordering");
+} else fail("Stage 4.40 AI Assistant UI extraction is incomplete");
 
 if (failures) {
   console.error(`\n${failures} validation check(s) failed.`);
