@@ -38,6 +38,7 @@ const files = [
   "frontend/js/notification-ui.js",
   "frontend/js/ai-assistant-ui.js",
   "frontend/js/app-shell-ui.js",
+  "frontend/js/app-state.js",
   "frontend/index.html",
   "frontend/css/style.css",
   "worker/index.mjs",
@@ -54,7 +55,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "frontend/js/sales-ui.js", "frontend/js/dashboard-ui.js", "frontend/js/reports-ui.js", "frontend/js/staff-ui.js", "frontend/js/security-ui.js", "frontend/js/profile-ui.js", "frontend/js/auth-ui.js", "frontend/js/notification-ui.js", "frontend/js/ai-assistant-ui.js", "frontend/js/app-shell-ui.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "frontend/js/sales-ui.js", "frontend/js/dashboard-ui.js", "frontend/js/reports-ui.js", "frontend/js/staff-ui.js", "frontend/js/security-ui.js", "frontend/js/profile-ui.js", "frontend/js/auth-ui.js", "frontend/js/notification-ui.js", "frontend/js/ai-assistant-ui.js", "frontend/js/app-shell-ui.js", "frontend/js/app-state.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -95,6 +96,7 @@ const quantityOnlyFiles = [
   "frontend/js/notification-ui.js",
   "frontend/js/ai-assistant-ui.js",
   "frontend/js/app-shell-ui.js",
+  "frontend/js/app-state.js",
   "backend/xtechManual.js"
 ];
 const disallowedFinancialUi = /(?:₱|\bprice\b|\bpricing\b|\brevenue\b|total amount|estimated total|unit price)/i;
@@ -105,6 +107,22 @@ else pass("quantity-only workflow has no monetary UI text");
 
 const appJs = fs.readFileSync(path.join(root, "frontend/js/app.js"), "utf8");
 const sharedUtilsJs = fs.readFileSync(path.join(root, "frontend/js/shared-utils.js"), "utf8");
+// Stage 4.42: app store owns operational collections and the shared pending counter.
+const appStateJs = fs.readFileSync(path.join(root, "frontend/js/app-state.js"), "utf8");
+const stage442Order = ["app-shell-ui.js", "app-state.js", "app.js"]
+  .map(file => html.indexOf('<script src="js/' + file + '"></script>'));
+if (stage442Order.every((position, index) => position >= 0 && (!index || position > stage442Order[index - 1])) &&
+    /XTechAppState\.createAppState/.test(appJs) &&
+    /createAppState/.test(appStateJs) &&
+    /adjustPendingRequests/.test(appStateJs) &&
+    /onPendingChange: changePending/.test(appJs) &&
+    /getProducts: appState\.getProducts/.test(appJs) &&
+    /getCustomers: appState\.getCustomers/.test(appJs) &&
+    /getPickups: appState\.getPickups/.test(appJs) &&
+    /getPickupFormItems: appState\.getPickupFormItems/.test(appJs) &&
+    !/let (?:products|customers|pickups|transactions|pickupFormItems|pendingRequests)\s*=/.test(appJs)) {
+  pass("Stage 4.42 shared operational state extraction and dependency wiring are present");
+} else fail("Stage 4.42 operational state module integration is incomplete");
 // Stage 4.41: the browser shell is isolated from session/data ownership.
 const appShellJs = fs.readFileSync(path.join(root, "frontend/js/app-shell-ui.js"), "utf8");
 const stage441Order = ["notification-ui.js", "ai-assistant-ui.js", "app-shell-ui.js", "app.js"]

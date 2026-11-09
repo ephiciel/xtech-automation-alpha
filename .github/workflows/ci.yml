@@ -61,6 +61,7 @@ jobs:
           frontend/js/notification-ui.js
           frontend/js/ai-assistant-ui.js
           frontend/js/app-shell-ui.js
+          frontend/js/app-state.js
 
       - name: Static project validation
         run: npm test

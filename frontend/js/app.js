@@ -2,12 +2,6 @@
 let token = "";
 let currentUser = null;
 let profile = null;
-let products = [];
-let transactions = [];
-let customers = [];
-let pickups = [];
-let pickupFormItems = [];
-let pendingRequests = 0;
 let currentSectionName = "dashboard";
 let appConfig = {};
 
@@ -30,9 +24,11 @@ const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
 const $ = id => document.getElementById(id);
 
 // Frontend service modules must load before the UI application starts.
-if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient) {
+if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient || !window.XTechAppState) {
     throw new Error("XTECH frontend dependencies are missing. Check script loading order.");
 }
+// Stage 4.42: one store supplies live operational data across extracted UI modules.
+const appState = window.XTechAppState.createAppState();
 const {
     esc,
     fmtDateTime,
@@ -72,16 +68,17 @@ function setMessage(id, message, kind = "error") {
 
 // Shows or hides the loading overlay
 function updateLoading() {
-    $("loadingOverlay")?.classList.toggle("hidden", pendingRequests <= 0);
+    $("loadingOverlay")?.classList.toggle("hidden", appState.getPendingRequests() <= 0);
 }
 
-// Shared API client reads the current token and updates the existing loading overlay.
+// Both API requests and report CSV transfers share one pending counter.
+function changePending(delta) {
+    appState.adjustPendingRequests(delta);
+    updateLoading();
+}
 const api = window.XTechApiClient.createApiClient({
     getToken: () => token,
-    onPendingChange: delta => {
-        pendingRequests = Math.max(0, pendingRequests + delta);
-        updateLoading();
-    }
+    onPendingChange: changePending
 });
 
 // Firebase SDK bootstrapping and OTP persistence are independent of UI event handlers.
@@ -137,19 +134,19 @@ function roleDisplayName(role) {
 // Finds a customer's name from their ID
 function customerNameFor(id, fallback = "Walk-in / No registered customer") {
     if (!id) return fallback;
-    const customer = customers.find(item => item.id === id || item.customerID === id);
+    const customer = appState.getCustomers().find(item => item.id === id || item.customerID === id);
     return customer?.name || fallback;
 }
 
 // Finds a product from its product ID
 function productById(id) {
-    return products.find(product => product.productID === id);
+    return appState.getProducts().find(product => product.productID === id);
 }
 
 // Builds product choices for dropdown menus
 function productOptions(includeOutOfStock = false) {
-    if (!products.length) return '<option value="">No active products available</option>';
-    return '<option value="">Select a product</option>' + products.map(product => {
+    if (!appState.getProducts().length) return '<option value="">No active products available</option>';
+    return '<option value="">Select a product</option>' + appState.getProducts().map(product => {
         const disabled = !includeOutOfStock && Number(product.quantity) <= 0 ? "disabled" : "";
         return `<option value="${esc(product.productID)}" ${disabled}>${esc(product.productName)} (${esc(product.productID)}) — ${product.quantity} ${esc(product.unit || "units")} available</option>`;
     }).join("");
@@ -170,7 +167,7 @@ function updateProductSelectors() {
     const filter = $("transactionProduct");
     if (filter) {
         const previous = filter.value;
-        filter.innerHTML = '<option value="">All Products</option>' + products.map(product =>
+        filter.innerHTML = '<option value="">All Products</option>' + appState.getProducts().map(product =>
             `<option value="${esc(product.productID)}">${esc(product.productName)} (${esc(product.productID)})</option>`
         ).join("");
         if ([...filter.options].some(option => option.value === previous)) filter.value = previous;
@@ -179,7 +176,7 @@ function updateProductSelectors() {
 
 // Builds customer choices for dropdown menus
 function customerOptions(includeWalkIn = true) {
-    const active = customers.filter(customer => customer.active !== false);
+    const active = appState.getCustomers().filter(customer => customer.active !== false);
     return (includeWalkIn ? '<option value="">Walk-in / No registered customer</option>' : '<option value="">All Customers</option>') +
         active.map(customer => `<option value="${esc(customer.id || customer.customerID)}">${esc(customer.name)}${customer.company ? ` — ${esc(customer.company)}` : ""}</option>`).join("");
 }
@@ -203,9 +200,9 @@ function updateCustomerSelectors() {
 
 // Loads the product and customer data needed by forms
 async function ensureFormData({ needCustomers = true } = {}) {
-    const requests = [api("/api/products", { silent: true }).then(data => { products = data.products || []; updateProductSelectors(); })];
+    const requests = [api("/api/products", { silent: true }).then(data => { appState.setProducts(data.products || []); updateProductSelectors(); })];
     if (needCustomers && profile?.role !== "customer") {
-        requests.push(api("/api/customers", { silent: true }).then(data => { customers = data.customers || []; updateCustomerSelectors(); }));
+        requests.push(api("/api/customers", { silent: true }).then(data => { appState.setCustomers(data.customers || []); updateCustomerSelectors(); }));
     }
     await Promise.all(requests);
 }
@@ -375,10 +372,10 @@ const inventoryUi = window.XTechInventoryUi.createInventoryUi({
     within,
     movementTypeLabel,
     fmtDateTime,
-    getProducts: () => products,
-    setProducts: value => { products = value; },
-    getTransactions: () => transactions,
-    setTransactions: value => { transactions = value; },
+    getProducts: appState.getProducts,
+    setProducts: appState.setProducts,
+    getTransactions: appState.getTransactions,
+    setTransactions: appState.setTransactions,
     getProfile: () => profile,
     confirm
 });
@@ -398,7 +395,7 @@ if (!window.XTechCustomerUi || !window.XTechPickupUi) {
 const customerUi = window.XTechCustomerUi.createCustomerUi({
     $, api, toast, setMessage, busy, esc, badge, validateName, validateEmail, validatePhone,
     validateText, closeModal, loadDashboard, updateCustomerSelectors, itemSummary, fmtDateTime,
-    fmtDate, getCustomers: () => customers, setCustomers: value => { customers = value; },
+    fmtDate, getCustomers: appState.getCustomers, setCustomers: appState.setCustomers,
     confirm, document, window
 });
 const pickupUi = window.XTechPickupUi.createPickupUi({
@@ -406,9 +403,9 @@ const pickupUi = window.XTechPickupUi.createPickupUi({
     validateFutureDate, validateText, validatePositiveWholeNumber, getProfile: () => profile,
     productById, customerNameFor, itemSummary, ensureFormData, mergeFormItem,
     updateProductSelectors, updateCustomerSelectors, loadDashboard, loadInventory,
-    loadTransactions, setProducts: value => { products = value; },
-    getPickups: () => pickups, setPickups: value => { pickups = value; },
-    getPickupFormItems: () => pickupFormItems, setPickupFormItems: value => { pickupFormItems = value; },
+    loadTransactions, setProducts: appState.setProducts,
+    getPickups: appState.getPickups, setPickups: appState.setPickups,
+    getPickupFormItems: appState.getPickupFormItems, setPickupFormItems: appState.setPickupFormItems,
     confirm, window
 });
 async function loadCustomers() { return customerUi.loadCustomers(); }
@@ -465,10 +462,7 @@ if (!window.XTechReportsUi) throw new Error("XTECH reports UI module is missing.
 const reportsUi = window.XTechReportsUi.createReportsUi({
     $, api, toast, esc, fmtDateTime, fmtDate, stockStatus, movementTypeLabel,
     getProfile: () => profile, getCurrentUser: () => currentUser, getToken: () => token,
-    onPendingChange: delta => {
-        pendingRequests = Math.max(0, pendingRequests + delta);
-        updateLoading();
-    },
+    onPendingChange: changePending,
     document, fetch: (...args) => fetch(...args), URL, URLSearchParams, setTimeout
 });
 async function loadReports() { return reportsUi.loadReports(); }
