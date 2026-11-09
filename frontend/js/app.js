@@ -3,32 +3,20 @@ let token = "";
 let currentUser = null;
 let profile = null;
 let currentSectionName = "dashboard";
-let appConfig = {};
-
-// Stores Firebase modular authentication helpers and temporary MFA state
-let firebaseAuthInstance = null;
-let firebaseAuthApi = null;
-let selectedSignInMethod = "password-totp";
-let authFlowInProgress = false;
-let pendingMfaResolver = null;
-let pendingMfaHint = null;
-let pendingTotpSecret = null;
-let pendingEmailOtpEmail = "";
-let pendingEmailOtpMaskedEmail = "";
-let emailOtpResendAvailableAt = 0;
-let emailOtpExpiresAt = 0;
-let emailOtpCountdownTimer = null;
+// Firebase handles, email-code countdowns and MFA challenge state live in auth-session-state.js.
 const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
 
 // Finds an element by its ID
 const $ = id => document.getElementById(id);
 
 // Frontend service modules must load before the UI application starts.
-if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient || !window.XTechAppState) {
+if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient || !window.XTechAppState || !window.XTechAuthSessionState) {
     throw new Error("XTECH frontend dependencies are missing. Check script loading order.");
 }
-// Stage 4.42: one store supplies live operational data across extracted UI modules.
+// Stage 4.42: shared operational data remains independent of authentication.
 const appState = window.XTechAppState.createAppState();
+// Stage 4.43: private Firebase handles and mutable authentication-flow state.
+const authSessionState = window.XTechAuthSessionState.createAuthSessionState();
 const {
     esc,
     fmtDateTime,
@@ -234,39 +222,13 @@ function showSection(name) { return appShellUi.showSection(name); }
 function applyRole() { return appShellUi.applyRole(); }
 function closeModal() { return appShellUi.closeModal(); }
 
-// Initializes the shared Firebase client and keeps the existing UI-facing state.
+// The auth UI shares this live per-application state without global MFA variables.
 async function initFirebase() {
     const result = await firebaseClient.initFirebase();
-    firebaseAuthApi = result.firebaseApi;
-    firebaseAuthInstance = result.auth;
-    appConfig = result.config;
+    authSessionState.setFirebaseClient(result);
     return result.auth;
 }
-
-// Stage 4.39: auth UI has private handlers; app.js retains session and Firebase initialization.
-// Auth flow state is shared with the isolated UI through explicit getters/setters.
-const authUiState = {
-  get selectedSignInMethod() { return selectedSignInMethod; },
-  set selectedSignInMethod(value) { selectedSignInMethod = value; },
-  get authFlowInProgress() { return authFlowInProgress; },
-  set authFlowInProgress(value) { authFlowInProgress = value; },
-  get pendingMfaResolver() { return pendingMfaResolver; },
-  set pendingMfaResolver(value) { pendingMfaResolver = value; },
-  get pendingMfaHint() { return pendingMfaHint; },
-  set pendingMfaHint(value) { pendingMfaHint = value; },
-  get pendingTotpSecret() { return pendingTotpSecret; },
-  set pendingTotpSecret(value) { pendingTotpSecret = value; },
-  get pendingEmailOtpEmail() { return pendingEmailOtpEmail; },
-  set pendingEmailOtpEmail(value) { pendingEmailOtpEmail = value; },
-  get pendingEmailOtpMaskedEmail() { return pendingEmailOtpMaskedEmail; },
-  set pendingEmailOtpMaskedEmail(value) { pendingEmailOtpMaskedEmail = value; },
-  get emailOtpResendAvailableAt() { return emailOtpResendAvailableAt; },
-  set emailOtpResendAvailableAt(value) { emailOtpResendAvailableAt = value; },
-  get emailOtpExpiresAt() { return emailOtpExpiresAt; },
-  set emailOtpExpiresAt(value) { emailOtpExpiresAt = value; },
-  get emailOtpCountdownTimer() { return emailOtpCountdownTimer; },
-  set emailOtpCountdownTimer(value) { emailOtpCountdownTimer = value; }
-};
+const authUiState = authSessionState.authUiState;
 
 function showAuthMode(mode, options) { return authUi.showAuthMode(mode, options); }
 function restoreEmailOtpSession() { return authUi.restoreEmailOtpSession(); }
@@ -277,7 +239,7 @@ function startNotificationPolling() { return notificationUi.startNotificationPol
 
 // Opens the main application for an authenticated user
 async function finishSignedInUser(user) {
-    token = await firebaseAuthApi.getIdToken(user, true);
+    token = await authSessionState.getFirebaseAuthApi().getIdToken(user, true);
     const me = await api("/api/auth/me");
     currentUser = user;
     profile = me.profile;
@@ -312,8 +274,8 @@ async function boot() {
     try {
         const auth = await initFirebase();
 
-        firebaseAuthApi.onAuthStateChanged(auth, async user => {
-            if (authFlowInProgress) return;
+        authSessionState.getFirebaseAuthApi().onAuthStateChanged(auth, async user => {
+            if (authUiState.authFlowInProgress) return;
 
             if (!user) {
                 showSignedOutState();
@@ -324,7 +286,7 @@ async function boot() {
                 await finishSignedInUser(user);
             } catch (error) {
                 setMessage("loginMessage", error.message);
-                await firebaseAuthApi.signOut(auth);
+                await authSessionState.getFirebaseAuthApi().signOut(auth);
             }
         });
 
@@ -339,11 +301,11 @@ const authUi = window.XTechAuthUi.createAuthUi({
     $, api, toast, setMessage, busy, validateName, validateEmail, validatePhone,
     validateText, validatePassword, validationError, emailOtpStore, state: authUiState,
     initFirebase, finishSignedInUser,
-    getFirebaseAuthApi: () => firebaseAuthApi,
-    getFirebaseAuthInstance: () => firebaseAuthInstance,
-    getAppConfig: () => appConfig, document, window, setInterval, clearInterval
+    getFirebaseAuthApi: authSessionState.getFirebaseAuthApi,
+    getFirebaseAuthInstance: authSessionState.getFirebaseAuthInstance,
+    getAppConfig: authSessionState.getAppConfig, document, window, setInterval, clearInterval
 });
-$("logoutBtn").addEventListener("click", () => firebaseAuthApi.signOut(firebaseAuthInstance));
+$("logoutBtn").addEventListener("click", () => authSessionState.getFirebaseAuthApi().signOut(authSessionState.getFirebaseAuthInstance()));
 
 // Connects the inventory UI to existing shared application data and API services.
 if (!window.XTechInventoryUi) {
@@ -436,7 +398,7 @@ const securityUi = window.XTechSecurityUi.createSecurityUi({
     $, toast, setMessage, busy, roleDisplayName, validationError,
     validateText, validateNewPassword,
     getCurrentUser: () => currentUser, getProfile: () => profile,
-    getFirebaseAuthApi: () => firebaseAuthApi, getFirebaseAuthInstance: () => firebaseAuthInstance
+    getFirebaseAuthApi: authSessionState.getFirebaseAuthApi, getFirebaseAuthInstance: authSessionState.getFirebaseAuthInstance
 });
 function loadSecurity() { return securityUi.loadSecurity(); }
 function resetPasswordChangeMfa() { return securityUi.resetPasswordChangeMfa(); }
