@@ -10,9 +10,6 @@ let pickupFormItems = [];
 let pendingRequests = 0;
 let currentSectionName = "dashboard";
 let appConfig = {};
-let notifications = [];
-let notificationPollTimer = null;
-let lastNotificationUnreadCount = 0;
 
 // Stores Firebase modular authentication helpers and temporary MFA state
 let firebaseAuthInstance = null;
@@ -280,145 +277,33 @@ async function initFirebase() {
     return result.auth;
 }
 
-// Stores the email OTP screen state so a page refresh does not reset the resend countdown
-function saveEmailOtpSession() {
-    if (!pendingEmailOtpEmail || !emailOtpExpiresAt) return;
-    emailOtpStore.save({
-        email: pendingEmailOtpEmail,
-        maskedEmail: pendingEmailOtpMaskedEmail,
-        resendAvailableAt: emailOtpResendAvailableAt,
-        expiresAt: emailOtpExpiresAt
-    });
-}
+// Stage 4.39: auth UI has private handlers; app.js retains session and Firebase initialization.
+// Auth flow state is shared with the isolated UI through explicit getters/setters.
+const authUiState = {
+  get selectedSignInMethod() { return selectedSignInMethod; },
+  set selectedSignInMethod(value) { selectedSignInMethod = value; },
+  get authFlowInProgress() { return authFlowInProgress; },
+  set authFlowInProgress(value) { authFlowInProgress = value; },
+  get pendingMfaResolver() { return pendingMfaResolver; },
+  set pendingMfaResolver(value) { pendingMfaResolver = value; },
+  get pendingMfaHint() { return pendingMfaHint; },
+  set pendingMfaHint(value) { pendingMfaHint = value; },
+  get pendingTotpSecret() { return pendingTotpSecret; },
+  set pendingTotpSecret(value) { pendingTotpSecret = value; },
+  get pendingEmailOtpEmail() { return pendingEmailOtpEmail; },
+  set pendingEmailOtpEmail(value) { pendingEmailOtpEmail = value; },
+  get pendingEmailOtpMaskedEmail() { return pendingEmailOtpMaskedEmail; },
+  set pendingEmailOtpMaskedEmail(value) { pendingEmailOtpMaskedEmail = value; },
+  get emailOtpResendAvailableAt() { return emailOtpResendAvailableAt; },
+  set emailOtpResendAvailableAt(value) { emailOtpResendAvailableAt = value; },
+  get emailOtpExpiresAt() { return emailOtpExpiresAt; },
+  set emailOtpExpiresAt(value) { emailOtpExpiresAt = value; },
+  get emailOtpCountdownTimer() { return emailOtpCountdownTimer; },
+  set emailOtpCountdownTimer(value) { emailOtpCountdownTimer = value; }
+};
 
-// Stops the live resend timer
-function stopEmailOtpCountdown() {
-    if (emailOtpCountdownTimer) {
-        clearInterval(emailOtpCountdownTimer);
-        emailOtpCountdownTimer = null;
-    }
-}
-
-// Removes the locally saved email OTP sign-in state
-function clearEmailOtpSession() {
-    stopEmailOtpCountdown();
-    pendingEmailOtpEmail = "";
-    pendingEmailOtpMaskedEmail = "";
-    emailOtpResendAvailableAt = 0;
-    emailOtpExpiresAt = 0;
-    emailOtpStore.clear();
-
-    if ($("resendEmailOtp")) {
-        $("resendEmailOtp").disabled = false;
-        $("resendEmailOtp").textContent = "Resend Code";
-    }
-    if ($("emailOtpCooldown")) $("emailOtpCooldown").textContent = "";
-}
-
-// Updates the resend button and countdown once per second
-function updateEmailOtpCountdown() {
-    const button = $("resendEmailOtp");
-    const countdown = $("emailOtpCooldown");
-    if (!button || !countdown) return;
-
-    const remainingSeconds = Math.max(0, Math.ceil((emailOtpResendAvailableAt - Date.now()) / 1000));
-    if (remainingSeconds > 0) {
-        button.disabled = true;
-        button.textContent = `Resend Code (${remainingSeconds}s)`;
-        countdown.textContent = `Please wait ${remainingSeconds} second${remainingSeconds === 1 ? "" : "s"} before requesting another code.`;
-        return;
-    }
-
-    button.disabled = false;
-    button.textContent = "Resend Code";
-    countdown.textContent = "You can request another code now.";
-    stopEmailOtpCountdown();
-}
-
-// Starts a live resend countdown using an absolute timestamp
-function startEmailOtpCountdown() {
-    stopEmailOtpCountdown();
-    updateEmailOtpCountdown();
-    if (emailOtpResendAvailableAt > Date.now()) {
-        emailOtpCountdownTimer = setInterval(updateEmailOtpCountdown, 250);
-    }
-}
-
-// Restores an unfinished email OTP sign-in after the page is refreshed
-function restoreEmailOtpSession() {
-    const saved = emailOtpStore.read();
-
-    if (!saved?.email || !saved?.expiresAt || Number(saved.expiresAt) <= Date.now()) {
-        clearEmailOtpSession();
-        return false;
-    }
-
-    pendingEmailOtpEmail = String(saved.email);
-    pendingEmailOtpMaskedEmail = String(saved.maskedEmail || saved.email);
-    emailOtpResendAvailableAt = Number(saved.resendAvailableAt || 0);
-    emailOtpExpiresAt = Number(saved.expiresAt || 0);
-
-    setSignInMethod("email-otp", { preserveOtpSession: true });
-    $("emailOtpEmail").value = pendingEmailOtpEmail;
-    $("loginForm").classList.add("hidden");
-    $("registerForm").classList.add("hidden");
-    $("emailOtpForm").classList.remove("hidden");
-    $("emailOtpDestination").textContent = `Code sent to ${pendingEmailOtpMaskedEmail}.`;
-
-    const minutesRemaining = Math.max(1, Math.ceil((emailOtpExpiresAt - Date.now()) / 60000));
-    setMessage("emailOtpMessage", `Enter the 6-digit code. It expires in about ${minutesRemaining} minute${minutesRemaining === 1 ? "" : "s"}.`, "success");
-    startEmailOtpCountdown();
-    return true;
-}
-
-// Hides the extra security forms and returns to the selected sign-in method
-function resetSecurityForms({ clearOtpSession = false } = {}) {
-    pendingMfaResolver = null;
-    pendingMfaHint = null;
-    pendingTotpSecret = null;
-    if (clearOtpSession) clearEmailOtpSession();
-    else stopEmailOtpCountdown();
-    $("totpChallengeForm").classList.add("hidden");
-    $("totpEnrollForm").classList.add("hidden");
-    $("emailOtpForm").classList.add("hidden");
-    $("loginForm").classList.remove("hidden");
-    $("totpChallengeCode").value = "";
-    $("totpEnrollCode").value = "";
-    $("emailOtpCode").value = "";
-    $("totpQr").innerHTML = "";
-    $("totpSecretKey").textContent = "—";
-    $("emailOtpDestination").textContent = "Enter the 6-digit code sent to your email.";
-    setMessage("totpChallengeMessage", "");
-    setMessage("totpEnrollMessage", "");
-    setMessage("emailOtpMessage", "");
-}
-
-// Switches between password plus authenticator and email-code sign in
-function setSignInMethod(method, { preserveOtpSession = false } = {}) {
-    selectedSignInMethod = method === "email-otp" ? "email-otp" : "password-totp";
-    const emailOtp = selectedSignInMethod === "email-otp";
-
-    if (!emailOtp && !preserveOtpSession) clearEmailOtpSession();
-
-    $("passwordTotpFields").classList.toggle("hidden", emailOtp);
-    $("emailOtpFields").classList.toggle("hidden", !emailOtp);
-    $("passwordTotpMethod").classList.toggle("active", !emailOtp);
-    $("emailOtpMethod").classList.toggle("active", emailOtp);
-    $("loginSubmit").textContent = emailOtp ? "Send 6-Digit Email Code" : "Continue with Password + Authenticator";
-    setMessage("loginMessage", "");
-}
-
-// Switches between the login and registration forms
-function showAuthMode(mode, { preserveOtpSession = false } = {}) {
-    const login = mode === "login";
-    resetSecurityForms({ clearOtpSession: !preserveOtpSession });
-    $("loginForm").classList.toggle("hidden", !login);
-    $("registerForm").classList.toggle("hidden", login);
-    $("showLoginBtn").classList.toggle("active", login);
-    $("showRegisterBtn").classList.toggle("active", !login);
-    setMessage("loginMessage", "");
-    setMessage("registerMessage", "");
-}
+function showAuthMode(mode, options) { return authUi.showAuthMode(mode, options); }
+function restoreEmailOtpSession() { return authUi.restoreEmailOtpSession(); }
 
 // Applies light or dark mode instantly and saves the choice
 function applyTheme(themeName = "light") {
@@ -457,145 +342,9 @@ function applyTheme(themeName = "light") {
     if (token && dashboardUi.hasCharts()) loadDashboard();
 }
 
-// Returns the current number of unread customer notifications
-function notificationUnreadCount() {
-    return notifications.filter(item => item.read !== true).length;
-}
-
-function notificationIcon(type) {
-    if (type === "purchase_recorded") return "✓";
-    if (type === "pickup_approved") return "⇄";
-    if (type === "pickup_completed") return "✓";
-    return "•";
-}
-
-function notificationItemHtml(item) {
-    const id = item.id || item.notificationID || "";
-    const unread = item.read !== true;
-    const reference = item.relatedId
-        ? `<span class="notification-reference">Reference: ${esc(item.relatedId)}</span>`
-        : "";
-    return `<button type="button" class="notification-item ${unread ? "unread" : "read"}" data-notification-id="${esc(id)}">
-        <span class="notification-item-icon" aria-hidden="true">${notificationIcon(item.type)}</span>
-        <span class="notification-item-body">
-            <span class="notification-item-title">${esc(item.title || "XTECH notification")}</span>
-            <span class="notification-item-message">${esc(item.message || "")}</span>
-            <span class="notification-item-meta">${esc(fmtDateTime(item.createdAt))}${reference}</span>
-        </span>
-        ${unread ? '<span class="notification-unread-dot" aria-label="Unread"></span>' : ""}
-    </button>`;
-}
-
-function bindNotificationItems(container) {
-    if (!container) return;
-    container.querySelectorAll("[data-notification-id]").forEach(button => {
-        button.addEventListener("click", async () => {
-            const id = button.dataset.notificationId;
-            if (!id) return;
-            await markNotificationRead(id);
-        });
-    });
-}
-
-function renderNotifications() {
-    const unread = notificationUnreadCount();
-    const badge = $("notificationBadge");
-    if (badge) {
-        badge.textContent = unread > 99 ? "99+" : String(unread);
-        badge.classList.toggle("hidden", unread === 0);
-    }
-
-    if ($("notificationMenuSummary")) {
-        $("notificationMenuSummary").textContent = unread
-            ? `${unread} unread notification${unread === 1 ? "" : "s"}`
-            : "No unread notifications";
-    }
-
-    const menuList = $("notificationMenuList");
-    if (menuList) {
-        const recent = notifications.slice(0, 5);
-        menuList.innerHTML = recent.length
-            ? recent.map(notificationItemHtml).join("")
-            : '<div class="notification-empty">No notifications yet.</div>';
-        bindNotificationItems(menuList);
-    }
-
-    const pageList = $("notificationPageList");
-    if (pageList) {
-        pageList.innerHTML = notifications.length
-            ? notifications.map(notificationItemHtml).join("")
-            : '<div class="notification-empty">No purchase or pickup notifications yet.</div>';
-        bindNotificationItems(pageList);
-    }
-}
-
-async function loadNotifications({ silent = false, announce = false } = {}) {
-    if (profile?.role !== "customer") return;
-    try {
-        const previousUnread = lastNotificationUnreadCount;
-        const data = await api("/api/notifications", { silent });
-        notifications = data.notifications || [];
-        const unread = notificationUnreadCount();
-        renderNotifications();
-
-        if (announce && unread > previousUnread) {
-            const added = unread - previousUnread;
-            toast(added === 1 ? "You have a new notification." : `You have ${added} new notifications.`);
-        }
-        lastNotificationUnreadCount = unread;
-    } catch (error) {
-        if (!silent) toast(error.message || "Unable to load notifications.");
-    }
-}
-
-async function markNotificationRead(id) {
-    const item = notifications.find(notification => (notification.id || notification.notificationID) === id);
-    if (!item || item.read === true) return;
-    try {
-        await api(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH", silent: true });
-        item.read = true;
-        item.readAt = new Date().toISOString();
-        lastNotificationUnreadCount = notificationUnreadCount();
-        renderNotifications();
-    } catch (error) {
-        toast(error.message || "Unable to update notification.");
-    }
-}
-
-async function markAllNotificationsRead() {
-    if (!notifications.some(item => item.read !== true)) return;
-    try {
-        await api("/api/notifications/read-all", { method: "PATCH", silent: true });
-        const readAt = new Date().toISOString();
-        notifications.forEach(item => {
-            item.read = true;
-            item.readAt = readAt;
-        });
-        lastNotificationUnreadCount = 0;
-        renderNotifications();
-        toast("All notifications marked as read");
-    } catch (error) {
-        toast(error.message || "Unable to mark notifications as read.");
-    }
-}
-
-function closeNotificationMenu() {
-    $("notificationMenu")?.classList.add("hidden");
-    $("notificationBell")?.setAttribute("aria-expanded", "false");
-}
-
-function stopNotificationPolling() {
-    if (notificationPollTimer) clearInterval(notificationPollTimer);
-    notificationPollTimer = null;
-}
-
-function startNotificationPolling() {
-    stopNotificationPolling();
-    if (profile?.role !== "customer") return;
-    notificationPollTimer = setInterval(() => {
-        if (!document.hidden) loadNotifications({ silent: true, announce: true });
-    }, 30000);
-}
+// Stage 4.39: notification UI handles message display, read flags, and polling.
+async function loadNotifications(options) { return notificationUi.loadNotifications(options); }
+function startNotificationPolling() { return notificationUi.startNotificationPolling(); }
 
 // Loads the saved theme and connects the theme buttons
 function initTheme() {
@@ -643,71 +392,14 @@ function showSignedOutState() {
     token = "";
     currentUser = null;
     profile = null;
-    notifications = [];
-    lastNotificationUnreadCount = 0;
-    stopNotificationPolling();
-    closeNotificationMenu();
-    renderNotifications();
+    notificationUi.resetNotifications();
     resetPasswordChangeMfa();
     resetChatPanel();
     $("loginScreen").classList.remove("hidden");
     $("app").classList.add("hidden");
 }
 
-// Shows the TOTP challenge when Firebase requires a second factor
-function beginTotpChallenge(error) {
-    pendingMfaResolver = firebaseAuthApi.getMultiFactorResolver(firebaseAuthInstance, error);
-    pendingMfaHint = pendingMfaResolver.hints.find(hint => hint.factorId === firebaseAuthApi.TotpMultiFactorGenerator.FACTOR_ID);
-
-    if (!pendingMfaHint) {
-        authFlowInProgress = false;
-        throw new Error("This account requires a multi-factor method that XTECH does not support.");
-    }
-
-    $("loginForm").classList.add("hidden");
-    $("registerForm").classList.add("hidden");
-    $("totpEnrollForm").classList.add("hidden");
-    $("totpChallengeForm").classList.remove("hidden");
-    $("totpChallengeCode").focus();
-    setMessage("totpChallengeMessage", "Enter the current code from your authenticator app.", "success");
-}
-
-// Starts authenticator enrollment for an account that has no TOTP factor yet
-async function beginTotpEnrollment(user) {
-    if (!user.emailVerified) {
-        await firebaseAuthApi.sendEmailVerification(user);
-        await firebaseAuthApi.signOut(firebaseAuthInstance);
-        authFlowInProgress = false;
-        resetSecurityForms();
-        setMessage("loginMessage", "Your email must be verified before Authenticator setup. A verification email was sent. Verify it, then sign in again.", "success");
-        return;
-    }
-
-    const session = await firebaseAuthApi.multiFactor(user).getSession();
-    pendingTotpSecret = await firebaseAuthApi.TotpMultiFactorGenerator.generateSecret(session);
-    const qrUri = pendingTotpSecret.generateQrCodeUrl(user.email || "XTECH user", "XTECH Automation");
-
-    $("loginForm").classList.add("hidden");
-    $("registerForm").classList.add("hidden");
-    $("totpChallengeForm").classList.add("hidden");
-    $("totpEnrollForm").classList.remove("hidden");
-    $("totpSecretKey").textContent = pendingTotpSecret.secretKey;
-    $("totpQr").innerHTML = "";
-
-    if (window.QRCode) {
-        new window.QRCode($("totpQr"), {
-            text: qrUri,
-            width: 180,
-            height: 180,
-            correctLevel: window.QRCode.CorrectLevel.M
-        });
-    } else {
-        $("totpQr").textContent = "QR code library could not load. Use the manual setup key below.";
-    }
-
-    $("totpEnrollCode").focus();
-    setMessage("totpEnrollMessage", "Scan the QR code with Google Authenticator or another TOTP app, then enter the 6-digit code.", "success");
-}
+// Stage 4.39: TOTP challenge and enrollment screens are managed by auth-ui.js.
 
 // Starts authentication and loads the app after sign in
 async function boot() {
@@ -735,301 +427,17 @@ async function boot() {
     }
 }
 
-// Adds the show and hide button to a password field
-function setupPasswordToggle(targetId) {
-    const input = $(targetId);
-    const toggle = document.querySelector(`[data-target="${targetId}"]`);
-    if (!input || !toggle) return;
-
-    toggle.addEventListener("click", () => {
-        const shouldShow = input.type === "password";
-        input.type = shouldShow ? "text" : "password";
-        toggle.textContent = shouldShow ? "Hide" : "Show";
-        toggle.setAttribute("aria-label", shouldShow ? "Hide password" : "Show password");
-    });
-}
-
-["loginPassword", "registerPassword", "registerPassword2", "userPassword", "currentPassword", "newPassword", "confirmNewPassword"].forEach(setupPasswordToggle);
-
+// Stage 4.39: keep theme, session, logout and navigation orchestration in app.js.
 window.addEventListener("DOMContentLoaded", initTheme);
-
-$("showLoginBtn").addEventListener("click", () => showAuthMode("login"));
-$("showRegisterBtn").addEventListener("click", () => showAuthMode("register"));
-$("passwordTotpMethod").addEventListener("click", () => setSignInMethod("password-totp"));
-$("emailOtpMethod").addEventListener("click", () => setSignInMethod("email-otp"));
-
-// Sends a Firebase password-reset email from the signed-out login screen
-$("forgotPasswordBtn").addEventListener("click", async event => {
-    setMessage("loginMessage", "");
-    try {
-        const email = validateEmail($("loginEmail").value);
-        const auth = await initFirebase();
-        await busy(event.currentTarget, () => firebaseAuthApi.sendPasswordResetEmail(auth, email), "Sending…");
-        setMessage("loginMessage", `If an XTECH account exists for ${email}, a password-reset email has been sent.`, "success");
-    } catch (error) {
-        if (error?.code === "auth/user-not-found") {
-            setMessage("loginMessage", "If an XTECH account exists for that email, a password-reset email has been sent.", "success");
-            return;
-        }
-        setMessage("loginMessage", error.message || "Could not send the password-reset email.");
-    }
+if (!window.XTechAuthUi) throw new Error("XTECH auth UI module is missing. Check script order.");
+const authUi = window.XTechAuthUi.createAuthUi({
+    $, api, toast, setMessage, busy, validateName, validateEmail, validatePhone,
+    validateText, validatePassword, validationError, emailOtpStore, state: authUiState,
+    initFirebase, finishSignedInUser,
+    getFirebaseAuthApi: () => firebaseAuthApi,
+    getFirebaseAuthInstance: () => firebaseAuthInstance,
+    getAppConfig: () => appConfig, document, window, setInterval, clearInterval
 });
-
-// Signs in with password plus Authenticator or sends a one-time email code
-$("loginForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("loginMessage", "");
-
-    if (selectedSignInMethod === "email-otp") {
-        try {
-            const email = validateEmail($("emailOtpEmail").value);
-            const result = await busy(event.submitter, () => api("/api/auth/email-otp/request", {
-                method: "POST",
-                body: JSON.stringify({ email }),
-                silent: true
-            }), "Sending Code…");
-
-            pendingEmailOtpEmail = email;
-            pendingEmailOtpMaskedEmail = result.maskedEmail || email;
-            emailOtpResendAvailableAt = Date.now() + (Number(result.resendAfterSeconds || 60) * 1000);
-            emailOtpExpiresAt = Date.now() + (Number(result.expiresInSeconds || 600) * 1000);
-            saveEmailOtpSession();
-            $("loginForm").classList.add("hidden");
-            $("registerForm").classList.add("hidden");
-            $("emailOtpForm").classList.remove("hidden");
-            $("emailOtpDestination").textContent = `Code sent to ${pendingEmailOtpMaskedEmail}.`;
-            setMessage("emailOtpMessage", `Enter the 6-digit code. It expires in ${Math.ceil(Number(result.expiresInSeconds || 600) / 60)} minutes.`, "success");
-            startEmailOtpCountdown();
-            $("emailOtpCode").focus();
-        } catch (error) {
-            setMessage("loginMessage", error.message);
-        }
-        return;
-    }
-
-    authFlowInProgress = true;
-    setMessage("loginMessage", "Checking your account…", "success");
-
-    try {
-        const email = validateEmail($("loginEmail").value);
-        const password = validateText($("loginPassword").value, "Password", 128, true);
-        const auth = await initFirebase();
-        const credential = await busy(event.submitter, () => firebaseAuthApi.signInWithEmailAndPassword(auth, email, password), "Signing In…");
-
-        const factors = firebaseAuthApi.multiFactor(credential.user).enrolledFactors;
-        const hasTotp = factors.some(factor => factor.factorId === firebaseAuthApi.TotpMultiFactorGenerator.FACTOR_ID);
-
-        const adminMfaBypass =
-            appConfig.adminMfaBypass === true &&
-            credential.user.email?.toLowerCase() === appConfig.adminEmail?.toLowerCase();
-
-        if (!hasTotp && !adminMfaBypass) {
-            await beginTotpEnrollment(credential.user);
-            return;
-        }
-
-        authFlowInProgress = false;
-        await finishSignedInUser(credential.user);
-    } catch (error) {
-        if (error.code === "auth/multi-factor-auth-required") {
-            try {
-                beginTotpChallenge(error);
-            } catch (challengeError) {
-                setMessage("loginMessage", challengeError.message);
-            }
-            return;
-        }
-        authFlowInProgress = false;
-        setMessage("loginMessage", error.message);
-    }
-});
-
-// Verifies a 6-digit code that was sent to the registered email address
-$("emailOtpForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("emailOtpMessage", "");
-
-    try {
-        const code = String($("emailOtpCode").value || "").trim();
-        if (!/^\d{6}$/.test(code)) validationError("Enter the 6-digit code from your email.");
-        if (!pendingEmailOtpEmail) validationError("The email-code session has expired. Request a new code.");
-
-        authFlowInProgress = true;
-        const result = await busy(event.submitter, () => api("/api/auth/email-otp/verify", {
-            method: "POST",
-            body: JSON.stringify({ email: pendingEmailOtpEmail, code }),
-            silent: true
-        }), "Verifying…");
-
-        const auth = await initFirebase();
-        const credential = await firebaseAuthApi.signInWithCustomToken(auth, result.customToken);
-        const user = credential.user;
-        clearEmailOtpSession();
-        authFlowInProgress = false;
-        resetSecurityForms();
-        await finishSignedInUser(user);
-    } catch (error) {
-        authFlowInProgress = false;
-        setMessage("emailOtpMessage", error.message || "The email sign-in code could not be verified.");
-    }
-});
-
-// Sends another email code after the resend cooldown
-$("resendEmailOtp").addEventListener("click", async event => {
-    setMessage("emailOtpMessage", "");
-
-    try {
-        if (!pendingEmailOtpEmail) validationError("The email-code session has expired. Start again.");
-
-        const remainingSeconds = Math.ceil((emailOtpResendAvailableAt - Date.now()) / 1000);
-        if (remainingSeconds > 0) {
-            validationError(`Please wait ${remainingSeconds} second${remainingSeconds === 1 ? "" : "s"} before requesting another code.`);
-        }
-
-        const result = await busy(event.currentTarget, () => api("/api/auth/email-otp/request", {
-            method: "POST",
-            body: JSON.stringify({ email: pendingEmailOtpEmail }),
-            silent: true
-        }), "Sending…");
-
-        pendingEmailOtpMaskedEmail = result.maskedEmail || pendingEmailOtpEmail;
-        emailOtpResendAvailableAt = Date.now() + (Number(result.resendAfterSeconds || 60) * 1000);
-        emailOtpExpiresAt = Date.now() + (Number(result.expiresInSeconds || 600) * 1000);
-        saveEmailOtpSession();
-        $("emailOtpCode").value = "";
-        $("emailOtpDestination").textContent = `New code sent to ${pendingEmailOtpMaskedEmail}.`;
-        setMessage("emailOtpMessage", "A new 6-digit code was sent.", "success");
-        startEmailOtpCountdown();
-        $("emailOtpCode").focus();
-    } catch (error) {
-        if (Number(error?.retryAfterSeconds) > 0) {
-            emailOtpResendAvailableAt = Date.now() + (Number(error.retryAfterSeconds) * 1000);
-            if (!emailOtpExpiresAt) emailOtpExpiresAt = Date.now() + (10 * 60 * 1000);
-            saveEmailOtpSession();
-            startEmailOtpCountdown();
-            setMessage("emailOtpMessage", "A recent code is still active. Use the countdown before requesting another code.");
-        } else {
-            setMessage("emailOtpMessage", error.message || "Could not resend the email code.");
-        }
-    }
-});
-
-// Cancels email-code sign in and returns to the login form
-$("cancelEmailOtp").addEventListener("click", () => {
-    clearEmailOtpSession();
-    resetSecurityForms();
-    setSignInMethod("email-otp", { preserveOtpSession: true });
-    $("emailOtpEmail").focus();
-});
-
-// Verifies the 6-digit code for a previously enrolled authenticator
-$("totpChallengeForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("totpChallengeMessage", "");
-
-    try {
-        const code = String($("totpChallengeCode").value || "").trim();
-        if (!/^\d{6}$/.test(code)) validationError("Enter the 6-digit code from your authenticator app.");
-        if (!pendingMfaResolver || !pendingMfaHint) validationError("The authentication session has expired. Start sign-in again.");
-
-        const assertion = firebaseAuthApi.TotpMultiFactorGenerator.assertionForSignIn(pendingMfaHint.uid, code);
-        const credential = await busy(event.submitter, () => pendingMfaResolver.resolveSignIn(assertion), "Verifying…");
-        pendingMfaResolver = null;
-        pendingMfaHint = null;
-        authFlowInProgress = false;
-        resetSecurityForms();
-        await finishSignedInUser(credential.user);
-    } catch (error) {
-        setMessage("totpChallengeMessage", error.message || "Invalid or expired authenticator code.");
-    }
-});
-
-// Finishes first-time TOTP enrollment
-$("totpEnrollForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("totpEnrollMessage", "");
-
-    try {
-        const code = String($("totpEnrollCode").value || "").trim();
-        if (!/^\d{6}$/.test(code)) validationError("Enter the 6-digit code from your authenticator app.");
-        if (!pendingTotpSecret || !firebaseAuthInstance.currentUser) validationError("The authenticator setup session has expired. Start sign-in again.");
-
-        const assertion = firebaseAuthApi.TotpMultiFactorGenerator.assertionForEnrollment(pendingTotpSecret, code);
-        await busy(event.submitter, () => firebaseAuthApi.multiFactor(firebaseAuthInstance.currentUser).enroll(assertion, "XTECH Authenticator"), "Enabling…");
-        pendingTotpSecret = null;
-        authFlowInProgress = false;
-        const user = firebaseAuthInstance.currentUser;
-        resetSecurityForms();
-        await finishSignedInUser(user);
-        toast("Authenticator enabled successfully");
-    } catch (error) {
-        setMessage("totpEnrollMessage", error.message || "Could not enable the authenticator.");
-    }
-});
-
-// Cancels an authenticator verification attempt
-$("cancelTotpChallenge").addEventListener("click", async () => {
-    authFlowInProgress = false;
-    pendingMfaResolver = null;
-    pendingMfaHint = null;
-    resetSecurityForms();
-    if (firebaseAuthInstance?.currentUser) await firebaseAuthApi.signOut(firebaseAuthInstance);
-});
-
-// Cancels first-time authenticator setup
-$("cancelTotpEnroll").addEventListener("click", async () => {
-    authFlowInProgress = false;
-    pendingTotpSecret = null;
-    if (firebaseAuthInstance?.currentUser) await firebaseAuthApi.signOut(firebaseAuthInstance);
-    resetSecurityForms();
-    setMessage("loginMessage", "Authenticator setup was cancelled.");
-});
-
-// Creates a pending customer account and requires the emailed 6-digit code to finish registration
-$("registerForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    setMessage("registerMessage", "");
-    authFlowInProgress = true;
-
-    try {
-        const name = validateName($("registerName").value, "Full name");
-        const email = validateEmail($("registerEmail").value);
-        const phone = validatePhone($("registerPhone").value);
-        const company = validateText($("registerCompany").value, "Company / Organization", 120);
-        const address = validateText($("registerAddress").value, "Address", 250);
-        const password = validatePassword($("registerPassword").value);
-        if (password !== $("registerPassword2").value) {
-            validationError("Passwords do not match.");
-        }
-
-        const result = await busy(event.submitter, () => api("/api/auth/register-customer", {
-            method: "POST",
-            body: JSON.stringify({ name, email, phone, company, address, password })
-        }), "Creating Account…");
-
-        pendingEmailOtpEmail = email;
-        pendingEmailOtpMaskedEmail = result.maskedEmail || email;
-        emailOtpResendAvailableAt = Date.now() + (Number(result.resendAfterSeconds || 60) * 1000);
-        emailOtpExpiresAt = Date.now() + (Number(result.expiresInSeconds || 600) * 1000);
-        saveEmailOtpSession();
-
-        authFlowInProgress = false;
-        showAuthMode("login", { preserveOtpSession: true });
-        setSignInMethod("email-otp", { preserveOtpSession: true });
-        $("emailOtpEmail").value = email;
-        $("loginForm").classList.add("hidden");
-        $("registerForm").classList.add("hidden");
-        $("emailOtpForm").classList.remove("hidden");
-        $("emailOtpDestination").textContent = `Registration code sent to ${pendingEmailOtpMaskedEmail}.`;
-        setMessage("emailOtpMessage", "Enter the 6-digit code to verify your email and finish creating your XTECH account.", "success");
-        startEmailOtpCountdown();
-        $("emailOtpCode").focus();
-    } catch (error) {
-        authFlowInProgress = false;
-        setMessage("registerMessage", error.message);
-    }
-});
-
 $("logoutBtn").addEventListener("click", () => firebaseAuthApi.signOut(firebaseAuthInstance));
 document.querySelectorAll(".nav").forEach(nav => nav.addEventListener("click", () => showSection(nav.dataset.section)));
 
@@ -1592,31 +1000,11 @@ $("modalClose").addEventListener("click", closeModal);
 $("modal").addEventListener("click", event => { if (event.target === $("modal")) closeModal(); });
 document.addEventListener("keydown", event => { if (event.key === "Escape") closeModal(); });
 
-$("notificationBell")?.addEventListener("click", event => {
-    event.stopPropagation();
-    const menu = $("notificationMenu");
-    if (!menu) return;
-    const opening = menu.classList.contains("hidden");
-    menu.classList.toggle("hidden", !opening);
-    $("notificationBell")?.setAttribute("aria-expanded", opening ? "true" : "false");
-    if (opening) loadNotifications({ silent: true });
-});
-
-$("notificationMenu")?.addEventListener("click", event => event.stopPropagation());
-$("markAllNotificationsReadTop")?.addEventListener("click", markAllNotificationsRead);
-$("markAllNotificationsRead")?.addEventListener("click", markAllNotificationsRead);
-$("refreshNotifications")?.addEventListener("click", () => loadNotifications());
-$("viewAllNotifications")?.addEventListener("click", () => {
-    closeNotificationMenu();
-    showSection("notifications");
-});
-document.addEventListener("click", closeNotificationMenu);
-document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && profile?.role === "customer") loadNotifications({ silent: true, announce: true });
-});
-
-document.addEventListener("keydown", event => {
-    if (event.key === "Escape") closeNotificationMenu();
+// Stage 4.39: customer notification UI is registered before the app boots.
+if (!window.XTechNotificationUi) throw new Error("XTECH notification UI module is missing. Check script order.");
+const notificationUi = window.XTechNotificationUi.createNotificationUi({
+    $, api, toast, esc, fmtDateTime, getProfile: () => profile, showSection,
+    document, setInterval, clearInterval
 });
 
 showAuthMode("login", { preserveOtpSession: true });

@@ -34,6 +34,8 @@ const files = [
   "frontend/js/staff-ui.js",
   "frontend/js/security-ui.js",
   "frontend/js/profile-ui.js",
+  "frontend/js/auth-ui.js",
+  "frontend/js/notification-ui.js",
   "frontend/index.html",
   "frontend/css/style.css",
   "worker/index.mjs",
@@ -50,7 +52,7 @@ for (const file of files) {
   fs.existsSync(full) ? pass(`${file} exists`) : fail(`${file} is missing`);
 }
 
-for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "frontend/js/sales-ui.js", "frontend/js/dashboard-ui.js", "frontend/js/reports-ui.js", "frontend/js/staff-ui.js", "frontend/js/security-ui.js", "frontend/js/profile-ui.js", "worker/index.mjs"]) {
+for (const file of ["backend/server.js", "backend/routes/email-otp.routes.js", "backend/routes/customer-registration.routes.js", "backend/routes/ai-assistant.routes.js", "backend/routes/customers.routes.js", "backend/routes/pickups.routes.js", "backend/routes/sales.routes.js", "backend/routes/report-dashboard.routes.js", "backend/routes/user-accounts.routes.js", "backend/routes/customer-profile.routes.js", "backend/routes/inventory.routes.js", "backend/routes/account-notification.routes.js", "backend/firebase.js", "backend/mailer.js", "backend/seed-admin.js", "scripts/enable-totp.js", "scripts/cleanup-v18-data.js", "frontend/js/app.js", "frontend/js/shared-utils.js", "frontend/js/api-client.js", "frontend/js/auth-client.js", "frontend/js/inventory-ui.js", "frontend/js/customer-ui.js", "frontend/js/pickup-ui.js", "frontend/js/sales-ui.js", "frontend/js/dashboard-ui.js", "frontend/js/reports-ui.js", "frontend/js/staff-ui.js", "frontend/js/security-ui.js", "frontend/js/profile-ui.js", "frontend/js/auth-ui.js", "frontend/js/notification-ui.js", "worker/index.mjs"]) {
   try {
     execFileSync(process.execPath, ["--check", path.join(root, file)], { stdio: "pipe" });
     pass(`${file} syntax`);
@@ -87,6 +89,8 @@ const quantityOnlyFiles = [
   "frontend/js/staff-ui.js",
   "frontend/js/security-ui.js",
   "frontend/js/profile-ui.js",
+  "frontend/js/auth-ui.js",
+  "frontend/js/notification-ui.js",
   "backend/xtechManual.js"
 ];
 const disallowedFinancialUi = /(?:₱|\bprice\b|\bpricing\b|\brevenue\b|total amount|estimated total|unit price)/i;
@@ -157,7 +161,20 @@ if (stage438Order.every((position, index) => position >= 0 && (!index || positio
     /function loadProfile\(/.test(profileUiJs) && /profileForm/.test(profileUiJs)) {
   pass("staff, security and profile UI extraction retains guarded wiring and load order");
 } else fail("Stage 4.38 UI modularization is incomplete");
-if (/EMAIL_OTP_SESSION_KEY/.test(appJs) && /startEmailOtpCountdown/.test(appJs) && /sendPasswordResetEmail/.test(appJs)) {
+const authUiJs = fs.readFileSync(path.join(root, "frontend/js/auth-ui.js"), "utf8");
+const notificationUiJs = fs.readFileSync(path.join(root, "frontend/js/notification-ui.js"), "utf8");
+const stage439Scripts = ["profile-ui.js", "auth-ui.js", "notification-ui.js", "app.js"]
+  .map(file => html.indexOf('<script src="js/' + file + '"></script>'));
+if (stage439Scripts.every((position, index) => position >= 0 && (!index || position > stage439Scripts[index - 1])) &&
+    /XTechAuthUi\.createAuthUi/.test(appJs) && /XTechNotificationUi\.createNotificationUi/.test(appJs) &&
+    /function restoreEmailOtpSession\(/.test(authUiJs) && /function beginTotpEnrollment\(/.test(authUiJs) &&
+    /\/api\/auth\/register-customer/.test(authUiJs) && /\/api\/auth\/email-otp\/verify/.test(authUiJs) &&
+    /function loadNotifications\(/.test(notificationUiJs) && /function startNotificationPolling\(/.test(notificationUiJs) &&
+    /function resetNotifications\(/.test(notificationUiJs) && /\/api\/notifications\/read-all/.test(notificationUiJs)) {
+  pass("auth and customer notification UI extraction keeps original flows and load order");
+} else fail("Stage 4.39 auth/notification UI extraction is incomplete");
+const combinedAuthUiSource = appJs + "\n" + authUiJs + "\n" + fs.readFileSync(path.join(root, "frontend/js/security-ui.js"), "utf8");
+if (/EMAIL_OTP_SESSION_KEY/.test(combinedAuthUiSource) && /startEmailOtpCountdown/.test(combinedAuthUiSource) && /sendPasswordResetEmail/.test(combinedAuthUiSource)) {
   pass("V19 login recovery and persistent OTP countdown are present");
 } else {
   fail("V19 login recovery or persistent OTP countdown is missing");

@@ -57,6 +57,8 @@ jobs:
           frontend/js/staff-ui.js
           frontend/js/security-ui.js
           frontend/js/profile-ui.js
+          frontend/js/auth-ui.js
+          frontend/js/notification-ui.js
 
       - name: Static project validation
         run: npm test
