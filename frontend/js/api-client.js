@@ -20,7 +20,24 @@
             if (!silent) onPendingChange(1);
 
             try {
-                const response = await fetchFn(url, { ...requestOptions, headers });
+                let response;
+                try {
+                    response = await fetchFn(url, { ...requestOptions, headers });
+                } catch (error) {
+                    // A transport failure is distinct from an HTTP 401/403/429/500.
+                    // Preserve the original message and NEVER auto-retry write requests.
+                    if (
+                        error &&
+                        typeof error === "object" &&
+                        error.name !== "AbortError" &&
+                        Object.isExtensible(error) &&
+                        !("status" in error)
+                    ) {
+                        error.status = 0;
+                        if (!("code" in error)) error.code = "NETWORK_ERROR";
+                    }
+                    throw error;
+                }
                 let data = {};
 
                 try {

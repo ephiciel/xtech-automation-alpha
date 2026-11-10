@@ -10,13 +10,17 @@ const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
 const $ = id => document.getElementById(id);
 
 // Frontend service modules must load before the UI application starts.
-if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient || !window.XTechAppState || !window.XTechAuthSessionState || !window.XTechAppLifecycle) {
+if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient || !window.XTechAppState || !window.XTechAuthSessionState || !window.XTechAppLifecycle || !window.XTechUiFeedback) {
     throw new Error("XTECH frontend dependencies are missing. Check script loading order.");
 }
 // Stage 4.42: shared operational data remains independent of authentication.
 const appState = window.XTechAppState.createAppState();
 // Stage 4.43: private Firebase handles and mutable authentication-flow state.
 const authSessionState = window.XTechAuthSessionState.createAuthSessionState();
+// Stages 4.45–4.50: explicit UI behavior dependencies, no duplicate page-local handlers.
+const { toast, setMessage, busy } = window.XTechUiFeedback.createUiFeedback({
+    getElement: $, setTimeoutFn: setTimeout, clearTimeoutFn: clearTimeout
+});
 const {
     esc,
     fmtDateTime,
@@ -36,23 +40,6 @@ const {
     validatePositiveWholeNumber,
     validateFutureDate
 } = window.XTechSharedUtils;
-
-// Shows a temporary notification message
-function toast(message) {
-    const element = $("toast");
-    element.textContent = message;
-    element.classList.add("show");
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => element.classList.remove("show"), 2800);
-}
-
-// Shows an error or success message in a form
-function setMessage(id, message, kind = "error") {
-    const element = $(id);
-    if (!element) return;
-    element.textContent = message || "";
-    element.classList.toggle("success", kind === "success");
-}
 
 // Shows or hides the loading overlay
 function updateLoading() {
@@ -74,19 +61,6 @@ const firebaseClient = window.XTechAuthClient.createFirebaseAuthClient({ request
 const emailOtpStore = window.XTechAuthClient.createEmailOtpStore({
     key: EMAIL_OTP_SESSION_KEY
 });
-
-// Disables a button while an action is running
-async function busy(button, work, workingText = "Please wait…") {
-    if (!button) return work();
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = workingText;
-    try { return await work(); }
-    finally {
-        button.disabled = false;
-        button.textContent = original;
-    }
-}
 
 // Creates a colored status badge
 function badge(status) {

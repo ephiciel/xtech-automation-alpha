@@ -46,7 +46,6 @@ jobs:
           "backend/utils/*.js"
           frontend/js/sidebar-toggle.js
           frontend/js/shared-utils.js
-          frontend/js/api-client.js
           frontend/js/auth-client.js
           frontend/js/inventory-ui.js
           frontend/js/customer-ui.js
@@ -64,9 +63,16 @@ jobs:
           frontend/js/app-state.js
           frontend/js/auth-session-state.js
           frontend/js/app-lifecycle.js
+          frontend/js/ui-feedback.js
+          frontend/js/api-client.js
+          scripts/release-audit.js
+          tests/frontend-release-candidate.test.js
 
       - name: Static project validation
         run: npm test
+
+      - name: Release-candidate safety audit (read-only)
+        run: npm run test:release-audit
 
       - name: Unit tests
         run: npm run test:unit
