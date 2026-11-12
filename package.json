@@ -1,42 +1,45 @@
 {
-  "name": "xtech-automation",
-  "version": "22.0.0",
-  "description": "XTECH Automation inventory, pickup and sales monitoring system",
-  "main": "backend/server.js",
-  "scripts": {
-    "start": "node backend/server.js",
-    "dev": "node --watch backend/server.js",
-    "seed:admin": "node backend/seed-admin.js",
-    "test": "node scripts/validate.js",
-    "check": "node scripts/validate.js",
-    "enable:totp": "node scripts/enable-totp.js",
-    "cleanup:v18": "node scripts/cleanup-v18-data.js",
-    "cf:dev": "wrangler dev",
-    "cf:deploy": "wrangler deploy",
-    "cf:whoami": "wrangler whoami",
-    "lint": "eslint backend frontend/js scripts worker",
-    "format:check": "prettier --check .",
-    "test:unit": "node --test tests/serialization.test.js tests/validators.test.js tests/auth-middleware.test.js tests/system-routes.test.js tests/account-notification-routes.test.js tests/inventory-routes.test.js tests/customers-routes.test.js tests/pickups-routes.test.js tests/sales-routes.test.js tests/report-dashboard-routes.test.js tests/user-accounts-routes.test.js tests/customer-profile-routes.test.js tests/email-otp-routes.test.js tests/customer-registration-routes.test.js tests/ai-assistant-routes.test.js tests/frontend-shared-utils.test.js tests/frontend-client-modules.test.js tests/frontend-inventory-ui.test.js tests/frontend-customer-pickup-ui.test.js tests/frontend-sales-dashboard-reports-ui.test.js tests/frontend-staff-security-profile-ui.test.js tests/frontend-auth-notification-ui.test.js tests/frontend-ai-assistant-ui.test.js tests/frontend-app-shell-ui.test.js tests/frontend-app-state.test.js tests/frontend-auth-session-state.test.js tests/frontend-app-lifecycle.test.js tests/frontend-release-candidate.test.js",
-    "test:integration": "node --test tests/integration-auth-flow.test.js tests/integration-http-smoke.test.js",
-    "test:staging-preflight": "node --test tests/staging-preflight.test.js",
-    "preflight:staging": "node scripts/staging-preflight.js --audit",
-    "test:staging-isolation": "node --test tests/staging-firebase-project.test.js tests/staging-isolation-check.test.js",
-    "preflight:staging:isolated": "node scripts/staging-isolation-check.js --strict",
-    "test:release-audit": "node scripts/release-audit.js"
-  },
-  "dependencies": {
-    "@google/genai": "^2.23.0",
-    "@ljoukov/firebase-admin-cloudflare": "^0.0.2",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "firebase": "^12.18.0",
-    "firebase-admin": "^14.3.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "eslint": "^10.14.0",
-    "globals": "^17.14.0",
-    "prettier": "^3.9.10",
-    "wrangler": "^4.156.0"
-  }
+    "name": "xtech-automation",
+    "version": "22.0.0",
+    "description": "XTECH Automation inventory, pickup and sales monitoring system",
+    "main": "backend/server.js",
+    "scripts": {
+        "start": "node backend/server.js",
+        "dev": "node --watch backend/server.js",
+        "seed:admin": "node backend/seed-admin.js",
+        "test": "node scripts/validate.js",
+        "check": "node scripts/validate.js",
+        "enable:totp": "node scripts/enable-totp.js",
+        "cleanup:v18": "node scripts/cleanup-v18-data.js",
+        "cf:dev": "wrangler dev",
+        "cf:deploy": "wrangler deploy",
+        "cf:whoami": "wrangler whoami",
+        "lint": "eslint backend frontend/js scripts worker",
+        "format:check": "prettier --check .",
+        "test:unit": "node --test tests/serialization.test.js tests/validators.test.js tests/auth-middleware.test.js tests/system-routes.test.js tests/account-notification-routes.test.js tests/inventory-routes.test.js tests/customers-routes.test.js tests/pickups-routes.test.js tests/sales-routes.test.js tests/report-dashboard-routes.test.js tests/user-accounts-routes.test.js tests/customer-profile-routes.test.js tests/email-otp-routes.test.js tests/customer-registration-routes.test.js tests/ai-assistant-routes.test.js tests/frontend-shared-utils.test.js tests/frontend-client-modules.test.js tests/frontend-inventory-ui.test.js tests/frontend-customer-pickup-ui.test.js tests/frontend-sales-dashboard-reports-ui.test.js tests/frontend-staff-security-profile-ui.test.js tests/frontend-auth-notification-ui.test.js tests/frontend-ai-assistant-ui.test.js tests/frontend-app-shell-ui.test.js tests/frontend-app-state.test.js tests/frontend-auth-session-state.test.js tests/frontend-app-lifecycle.test.js tests/frontend-release-candidate.test.js",
+        "test:integration": "node --test tests/integration-auth-flow.test.js tests/integration-http-smoke.test.js",
+        "test:staging-preflight": "node --test tests/staging-preflight.test.js",
+        "preflight:staging": "node scripts/staging-preflight.js --audit",
+        "test:staging-isolation": "node --test tests/staging-firebase-project.test.js tests/staging-isolation-check.test.js",
+        "preflight:staging:isolated": "node scripts/staging-isolation-check.js --strict",
+        "test:release-audit": "node scripts/release-audit.js",
+        "format:source": "node scripts/readability-format.cjs --check",
+        "format:source:check": "node scripts/readability-format.cjs --check",
+        "format:source:write": "node scripts/readability-format.cjs --write"
+    },
+    "dependencies": {
+        "@google/genai": "^2.23.0",
+        "@ljoukov/firebase-admin-cloudflare": "^0.0.2",
+        "dotenv": "^17.4.2",
+        "express": "^5.2.1",
+        "firebase": "^12.18.0",
+        "firebase-admin": "^14.3.0"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "eslint": "^10.14.0",
+        "globals": "^17.14.0",
+        "prettier": "^3.9.10",
+        "wrangler": "^4.156.0"
+    }
 }

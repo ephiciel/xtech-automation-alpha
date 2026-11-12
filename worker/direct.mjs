@@ -9,51 +9,51 @@ const nodeHandler = httpServerHandler({ port: 3000 });
 let startPromise;
 
 async function ensureStarted() {
-  // Once per isolate; startup runs lazily to avoid expensive global work.
-  if (!startPromise) {
-    startPromise = serverModule.startServer().catch((error) => {
-      startPromise = undefined;
-      throw error;
-    });
-  }
-  await startPromise;
+    // Once per isolate; startup runs lazily to avoid expensive global work.
+    if (!startPromise) {
+        startPromise = serverModule.startServer().catch((error) => {
+            startPromise = undefined;
+            throw error;
+        });
+    }
+    await startPromise;
 }
 
 export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
+    async fetch(request, env, ctx) {
+        const url = new URL(request.url);
 
-    // Isolated preflight endpoint; does not access Firebase or reveal secrets.
-    if (request.method === "GET" && url.pathname === "/__xtech_direct/health") {
-      return Response.json({
-        success: true,
-        mode: "direct-worker-test",
-        containerRequired: false,
-        firebaseServiceAccountConfigured: Boolean(
-          env.GOOGLE_SERVICE_ACCOUNT_JSON || env.FIREBASE_SERVICE_ACCOUNT_JSON
-        ),
-      });
-    }
+        // Isolated preflight endpoint; does not access Firebase or reveal secrets.
+        if (request.method === "GET" && url.pathname === "/__xtech_direct/health") {
+            return Response.json({
+                success: true,
+                mode: "direct-worker-test",
+                containerRequired: false,
+                firebaseServiceAccountConfigured: Boolean(
+                    env.GOOGLE_SERVICE_ACCOUNT_JSON || env.FIREBASE_SERVICE_ACCOUNT_JSON
+                )
+            });
+        }
 
-    // Serve the existing HTML/CSS/JS frontend from this test Worker.
-    // Its relative /api/* calls will then target this Worker, not production.
-    if (url.pathname !== "/api" && !url.pathname.startsWith("/api/")) {
-      return env.ASSETS.fetch(request);
-    }
+        // Serve the existing HTML/CSS/JS frontend from this test Worker.
+        // Its relative /api/* calls will then target this Worker, not production.
+        if (url.pathname !== "/api" && !url.pathname.startsWith("/api/")) {
+            return env.ASSETS.fetch(request);
+        }
 
-    try {
-      await ensureStarted();
-      return nodeHandler.fetch(request, env, ctx);
-    } catch (error) {
-      console.error("XTECH direct Worker startup failed:", error);
-      return Response.json(
-        {
-          success: false,
-          error: "XTECH direct Worker could not initialize",
-          message: "Check the Worker logs and Firebase service-account configuration.",
-        },
-        { status: 503 }
-      );
+        try {
+            await ensureStarted();
+            return nodeHandler.fetch(request, env, ctx);
+        } catch (error) {
+            console.error("XTECH direct Worker startup failed:", error);
+            return Response.json(
+                {
+                    success: false,
+                    error: "XTECH direct Worker could not initialize",
+                    message: "Check the Worker logs and Firebase service-account configuration."
+                },
+                { status: 503 }
+            );
+        }
     }
-  },
 };

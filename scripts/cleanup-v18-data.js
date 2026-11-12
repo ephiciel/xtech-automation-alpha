@@ -2,7 +2,9 @@ require("dotenv").config();
 const { initFirebase } = require("../backend/firebase");
 
 if (!process.argv.includes("--confirm")) {
-    console.log("This cleanup permanently removes legacy monetary fields from old product and sales records.");
+    console.log(
+        "This cleanup permanently removes legacy monetary fields from old product and sales records."
+    );
     console.log("Run again with: npm.cmd run cleanup:v18 -- --confirm");
     process.exit(0);
 }
@@ -40,7 +42,7 @@ async function main() {
         const data = doc.data();
         const items = Array.isArray(data.items) ? data.items : [];
         let changed = Object.prototype.hasOwnProperty.call(data, "total");
-        const cleanedItems = items.map(item => {
+        const cleanedItems = items.map((item) => {
             const clean = { ...item };
             if (Object.prototype.hasOwnProperty.call(clean, "unitPrice")) {
                 delete clean.unitPrice;
@@ -72,7 +74,7 @@ async function main() {
     console.log("V18 legacy monetary-field cleanup completed.");
 }
 
-main().catch(error => {
+main().catch((error) => {
     console.error("Cleanup failed:", error.message);
     process.exit(1);
 });

@@ -18,10 +18,14 @@ async function enableTotp() {
         });
 
         console.log("TOTP MFA is enabled for XTECH Automation.");
-        console.log("Make sure Firebase Authentication with Identity Platform is enabled in the Firebase console.");
+        console.log(
+            "Make sure Firebase Authentication with Identity Platform is enabled in the Firebase console."
+        );
     } catch (error) {
         console.error("Could not enable TOTP MFA:", error.message);
-        console.error("Upgrade Firebase Authentication to Identity Platform first, then run this command again.");
+        console.error(
+            "Upgrade Firebase Authentication to Identity Platform first, then run this command again."
+        );
         process.exit(1);
     }
 }

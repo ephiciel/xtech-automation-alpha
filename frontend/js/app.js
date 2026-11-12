@@ -7,10 +7,18 @@ let currentSectionName = "dashboard";
 const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
 
 // Finds an element by its ID
-const $ = id => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
 // Frontend service modules must load before the UI application starts.
-if (!window.XTechSharedUtils || !window.XTechApiClient || !window.XTechAuthClient || !window.XTechAppState || !window.XTechAuthSessionState || !window.XTechAppLifecycle || !window.XTechUiFeedback) {
+if (
+    !window.XTechSharedUtils ||
+    !window.XTechApiClient ||
+    !window.XTechAuthClient ||
+    !window.XTechAppState ||
+    !window.XTechAuthSessionState ||
+    !window.XTechAppLifecycle ||
+    !window.XTechUiFeedback
+) {
     throw new Error("XTECH frontend dependencies are missing. Check script loading order.");
 }
 // Stage 4.42: shared operational data remains independent of authentication.
@@ -19,7 +27,9 @@ const appState = window.XTechAppState.createAppState();
 const authSessionState = window.XTechAuthSessionState.createAuthSessionState();
 // Stages 4.45–4.50: explicit UI behavior dependencies, no duplicate page-local handlers.
 const { toast, setMessage, busy } = window.XTechUiFeedback.createUiFeedback({
-    getElement: $, setTimeoutFn: setTimeout, clearTimeoutFn: clearTimeout
+    getElement: $,
+    setTimeoutFn: setTimeout,
+    clearTimeoutFn: clearTimeout
 });
 const {
     esc,
@@ -64,7 +74,9 @@ const emailOtpStore = window.XTechAuthClient.createEmailOtpStore({
 
 // Creates a colored status badge
 function badge(status) {
-    const className = String(status || "").toLowerCase().replace(/\s+/g, "-");
+    const className = String(status || "")
+        .toLowerCase()
+        .replace(/\s+/g, "-");
     return `<span class="badge ${className}">${esc(status || "Unknown")}</span>`;
 }
 
@@ -79,49 +91,70 @@ function stockStatus(product) {
 
 // Converts stock movement codes into readable names
 function movementTypeLabel(type) {
-    return ({
-        STOCK_IN: "Stock In (Added)",
-        STOCK_OUT: "Stock Out (Released)",
-        PICKUP_OUT: "Pickup Completion",
-        SALE_OUT: "Sale Confirmation",
-        INITIAL_STOCK: "Initial Stock"
-    })[type] || String(type || "Movement").replaceAll("_", " ");
+    return (
+        {
+            STOCK_IN: "Stock In (Added)",
+            STOCK_OUT: "Stock Out (Released)",
+            PICKUP_OUT: "Pickup Completion",
+            SALE_OUT: "Sale Confirmation",
+            INITIAL_STOCK: "Initial Stock"
+        }[type] || String(type || "Movement").replaceAll("_", " ")
+    );
 }
 
 // Converts role codes into names shown to users
 function roleDisplayName(role) {
-    return ({ admin: "Admin", owner: "Admin", secretary: "Secretary", warehouse: "Warehouse", customer: "Customer" })[role] || "User";
+    return (
+        {
+            admin: "Admin",
+            owner: "Admin",
+            secretary: "Secretary",
+            warehouse: "Warehouse",
+            customer: "Customer"
+        }[role] || "User"
+    );
 }
 
 // Finds a customer's name from their ID
 function customerNameFor(id, fallback = "Walk-in / No registered customer") {
     if (!id) return fallback;
-    const customer = appState.getCustomers().find(item => item.id === id || item.customerID === id);
+    const customer = appState
+        .getCustomers()
+        .find((item) => item.id === id || item.customerID === id);
     return customer?.name || fallback;
 }
 
 // Finds a product from its product ID
 function productById(id) {
-    return appState.getProducts().find(product => product.productID === id);
+    return appState.getProducts().find((product) => product.productID === id);
 }
 
 // Builds product choices for dropdown menus
 function productOptions(includeOutOfStock = false) {
-    if (!appState.getProducts().length) return '<option value="">No active products available</option>';
-    return '<option value="">Select a product</option>' + appState.getProducts().map(product => {
-        const disabled = !includeOutOfStock && Number(product.quantity) <= 0 ? "disabled" : "";
-        return `<option value="${esc(product.productID)}" ${disabled}>${esc(product.productName)} (${esc(product.productID)}) — ${product.quantity} ${esc(product.unit || "units")} available</option>`;
-    }).join("");
+    if (!appState.getProducts().length)
+        return '<option value="">No active products available</option>';
+    return (
+        '<option value="">Select a product</option>' +
+        appState
+            .getProducts()
+            .map((product) => {
+                const disabled =
+                    !includeOutOfStock && Number(product.quantity) <= 0 ? "disabled" : "";
+                return `<option value="${esc(product.productID)}" ${disabled}>${esc(product.productName)} (${esc(product.productID)}) — ${product.quantity} ${esc(product.unit || "units")} available</option>`;
+            })
+            .join("")
+    );
 }
 
 // Updates every product dropdown with current inventory data
 function updateProductSelectors() {
-    ["pickupProduct", "saleProduct"].forEach(id => {
+    ["pickupProduct", "saleProduct"].forEach((id) => {
         const select = $(id);
         if (!select) return;
         const previous = select.value;
         select.innerHTML = productOptions(false);
-        if ([...select.options].some(option => option.value === previous)) select.value = previous;
+        if ([...select.options].some((option) => option.value === previous))
+            select.value = previous;
     });
 
     if ($("pickupProduct")) syncPickupQuantityLimit();
@@ -129,72 +162,124 @@ function updateProductSelectors() {
     const filter = $("transactionProduct");
     if (filter) {
         const previous = filter.value;
-        filter.innerHTML = '<option value="">All Products</option>' + appState.getProducts().map(product =>
-            `<option value="${esc(product.productID)}">${esc(product.productName)} (${esc(product.productID)})</option>`
-        ).join("");
-        if ([...filter.options].some(option => option.value === previous)) filter.value = previous;
+        filter.innerHTML =
+            '<option value="">All Products</option>' +
+            appState
+                .getProducts()
+                .map(
+                    (product) =>
+                        `<option value="${esc(product.productID)}">${esc(product.productName)} (${esc(product.productID)})</option>`
+                )
+                .join("");
+        if ([...filter.options].some((option) => option.value === previous))
+            filter.value = previous;
     }
 }
 
 // Builds customer choices for dropdown menus
 function customerOptions(includeWalkIn = true) {
-    const active = appState.getCustomers().filter(customer => customer.active !== false);
-    return (includeWalkIn ? '<option value="">Walk-in / No registered customer</option>' : '<option value="">All Customers</option>') +
-        active.map(customer => `<option value="${esc(customer.id || customer.customerID)}">${esc(customer.name)}${customer.company ? ` — ${esc(customer.company)}` : ""}</option>`).join("");
+    const active = appState.getCustomers().filter((customer) => customer.active !== false);
+    return (
+        (includeWalkIn
+            ? '<option value="">Walk-in / No registered customer</option>'
+            : '<option value="">All Customers</option>') +
+        active
+            .map(
+                (customer) =>
+                    `<option value="${esc(customer.id || customer.customerID)}">${esc(customer.name)}${customer.company ? ` — ${esc(customer.company)}` : ""}</option>`
+            )
+            .join("")
+    );
 }
 
 // Updates every customer dropdown with current customer data
 function updateCustomerSelectors() {
-    ["pickupCustomerID", "saleCustomerID"].forEach(id => {
+    ["pickupCustomerID", "saleCustomerID"].forEach((id) => {
         const select = $(id);
         if (!select) return;
         const previous = select.value;
         select.innerHTML = customerOptions(true);
-        if ([...select.options].some(option => option.value === previous)) select.value = previous;
+        if ([...select.options].some((option) => option.value === previous))
+            select.value = previous;
     });
     const saleFilter = $("saleCustomerFilter");
     if (saleFilter) {
         const previous = saleFilter.value;
         saleFilter.innerHTML = customerOptions(false);
-        if ([...saleFilter.options].some(option => option.value === previous)) saleFilter.value = previous;
+        if ([...saleFilter.options].some((option) => option.value === previous))
+            saleFilter.value = previous;
     }
 }
 
 // Loads the product and customer data needed by forms
 async function ensureFormData({ needCustomers = true } = {}) {
-    const requests = [api("/api/products", { silent: true }).then(data => { appState.setProducts(data.products || []); updateProductSelectors(); })];
+    const requests = [
+        api("/api/products", { silent: true }).then((data) => {
+            appState.setProducts(data.products || []);
+            updateProductSelectors();
+        })
+    ];
     if (needCustomers && profile?.role !== "customer") {
-        requests.push(api("/api/customers", { silent: true }).then(data => { appState.setCustomers(data.customers || []); updateCustomerSelectors(); }));
+        requests.push(
+            api("/api/customers", { silent: true }).then((data) => {
+                appState.setCustomers(data.customers || []);
+                updateCustomerSelectors();
+            })
+        );
     }
     await Promise.all(requests);
 }
 
 // Adds a product to a form list or increases its quantity
 function mergeFormItem(list, productID, quantity) {
-    const existing = list.find(item => item.productID === productID);
+    const existing = list.find((item) => item.productID === productID);
     if (existing) existing.quantity += quantity;
     else list.push({ productID, quantity });
 }
 
 // Inventory product selectors still delegate pickup quantity checks to the pickup UI.
-function syncPickupQuantityLimit() { return pickupUi.syncPickupQuantityLimit(); }
+function syncPickupQuantityLimit() {
+    return pickupUi.syncPickupQuantityLimit();
+}
 
 // Stage 4.41: shared page shell owns navigation, role visibility, theme, and modal controls.
-if (!window.XTechAppShellUi) throw new Error("XTECH application shell is missing. Check script order.");
+if (!window.XTechAppShellUi)
+    throw new Error("XTECH application shell is missing. Check script order.");
 const appShellUi = window.XTechAppShellUi.createAppShellUi({
-    $, document, window, localStorage, requestAnimationFrame,
+    $,
+    document,
+    window,
+    localStorage,
+    requestAnimationFrame,
     getProfile: () => profile,
     getToken: () => token,
-    setCurrentSectionName: name => { currentSectionName = name; },
-    updateAiContextLabel, renderAiQuickActions,
+    setCurrentSectionName: (name) => {
+        currentSectionName = name;
+    },
+    updateAiContextLabel,
+    renderAiQuickActions,
     hasDashboardCharts: () => dashboardUi.hasCharts(),
-    loadDashboard, loadInventory, loadTransactions, loadCustomers,
-    loadPickups, loadNotifications, loadSales, loadUsers, loadReports,
-    loadProfile, loadSecurity
+    loadDashboard,
+    loadInventory,
+    loadTransactions,
+    loadCustomers,
+    loadPickups,
+    loadNotifications,
+    loadSales,
+    loadUsers,
+    loadReports,
+    loadProfile,
+    loadSecurity
 });
-function showSection(name) { return appShellUi.showSection(name); }
-function applyRole() { return appShellUi.applyRole(); }
-function closeModal() { return appShellUi.closeModal(); }
+function showSection(name) {
+    return appShellUi.showSection(name);
+}
+function applyRole() {
+    return appShellUi.applyRole();
+}
+function closeModal() {
+    return appShellUi.closeModal();
+}
 
 // The auth UI shares this live per-application state without global MFA variables.
 async function initFirebase() {
@@ -204,12 +289,20 @@ async function initFirebase() {
 }
 const authUiState = authSessionState.authUiState;
 
-function showAuthMode(mode, options) { return authUi.showAuthMode(mode, options); }
-function restoreEmailOtpSession() { return authUi.restoreEmailOtpSession(); }
+function showAuthMode(mode, options) {
+    return authUi.showAuthMode(mode, options);
+}
+function restoreEmailOtpSession() {
+    return authUi.restoreEmailOtpSession();
+}
 
 // Stage 4.39: notification UI handles message display, read flags, and polling.
-async function loadNotifications(options) { return notificationUi.loadNotifications(options); }
-function startNotificationPolling() { return notificationUi.startNotificationPolling(); }
+async function loadNotifications(options) {
+    return notificationUi.loadNotifications(options);
+}
+function startNotificationPolling() {
+    return notificationUi.startNotificationPolling();
+}
 
 // Opens the main application for an authenticated user
 async function finishSignedInUser(user) {
@@ -244,7 +337,8 @@ function showSignedOutState() {
 // Stage 4.39: TOTP challenge and enrollment screens are managed by auth-ui.js.
 
 // Stage 4.44: the lifecycle module owns startup and Firebase observer dispatch.
-if (!window.XTechAppLifecycle) throw new Error("XTECH application lifecycle is missing. Check script order.");
+if (!window.XTechAppLifecycle)
+    throw new Error("XTECH application lifecycle is missing. Check script order.");
 const appLifecycle = window.XTechAppLifecycle.createAppLifecycle({
     prepareAuthScreen: () => {
         showAuthMode("login", { preserveOtpSession: true });
@@ -252,7 +346,7 @@ const appLifecycle = window.XTechAppLifecycle.createAppLifecycle({
     },
     initFirebase,
     registerAuthObserver: (auth, notify) =>
-        authSessionState.getFirebaseAuthApi().onAuthStateChanged(auth, async user => {
+        authSessionState.getFirebaseAuthApi().onAuthStateChanged(auth, async (user) => {
             if (authUiState.authFlowInProgress) return;
             await notify(user);
         }),
@@ -262,22 +356,42 @@ const appLifecycle = window.XTechAppLifecycle.createAppLifecycle({
         setMessage("loginMessage", error.message);
         await authSessionState.getFirebaseAuthApi().signOut(auth);
     },
-    onStartupError: error => setMessage("loginMessage", error.message)
+    onStartupError: (error) => setMessage("loginMessage", error.message)
 });
 // Retain the original entry point while preventing duplicate observers.
-async function boot() { return appLifecycle.start(); }
+async function boot() {
+    return appLifecycle.start();
+}
 
 // Stage 4.39: keep theme, session, logout and navigation orchestration in app.js.
 if (!window.XTechAuthUi) throw new Error("XTECH auth UI module is missing. Check script order.");
 const authUi = window.XTechAuthUi.createAuthUi({
-    $, api, toast, setMessage, busy, validateName, validateEmail, validatePhone,
-    validateText, validatePassword, validationError, emailOtpStore, state: authUiState,
-    initFirebase, finishSignedInUser,
+    $,
+    api,
+    toast,
+    setMessage,
+    busy,
+    validateName,
+    validateEmail,
+    validatePhone,
+    validateText,
+    validatePassword,
+    validationError,
+    emailOtpStore,
+    state: authUiState,
+    initFirebase,
+    finishSignedInUser,
     getFirebaseAuthApi: authSessionState.getFirebaseAuthApi,
     getFirebaseAuthInstance: authSessionState.getFirebaseAuthInstance,
-    getAppConfig: authSessionState.getAppConfig, document, window, setInterval, clearInterval
+    getAppConfig: authSessionState.getAppConfig,
+    document,
+    window,
+    setInterval,
+    clearInterval
 });
-$("logoutBtn").addEventListener("click", () => authSessionState.getFirebaseAuthApi().signOut(authSessionState.getFirebaseAuthInstance()));
+$("logoutBtn").addEventListener("click", () =>
+    authSessionState.getFirebaseAuthApi().signOut(authSessionState.getFirebaseAuthInstance())
+);
 
 // Connects the inventory UI to existing shared application data and API services.
 if (!window.XTechInventoryUi) {
@@ -313,13 +427,24 @@ const inventoryUi = window.XTechInventoryUi.createInventoryUi({
     getProfile: () => profile,
     confirm
 });
-async function loadInventory() { return inventoryUi.loadInventory(); }
-async function loadTransactions() { return inventoryUi.loadTransactions(); }
+async function loadInventory() {
+    return inventoryUi.loadInventory();
+}
+async function loadTransactions() {
+    return inventoryUi.loadTransactions();
+}
 
 // Customer history and sales reuse the same summary helper.
 // Creates a short readable list of products and quantities
 function itemSummary(items = []) {
-    return items.length ? items.map(item => `${esc(item.productName || productById(item.productID)?.productName || item.productID)} × ${Number(item.quantity)}`).join("<br>") : "—";
+    return items.length
+        ? items
+              .map(
+                  (item) =>
+                      `${esc(item.productName || productById(item.productID)?.productName || item.productID)} × ${Number(item.quantity)}`
+              )
+              .join("<br>")
+        : "—";
 }
 
 // Customer and pickup modules register UI events without changing application state ownership.
@@ -327,95 +452,249 @@ if (!window.XTechCustomerUi || !window.XTechPickupUi) {
     throw new Error("XTECH customer or pickup UI module is missing. Check script loading order.");
 }
 const customerUi = window.XTechCustomerUi.createCustomerUi({
-    $, api, toast, setMessage, busy, esc, badge, validateName, validateEmail, validatePhone,
-    validateText, closeModal, loadDashboard, updateCustomerSelectors, itemSummary, fmtDateTime,
-    fmtDate, getCustomers: appState.getCustomers, setCustomers: appState.setCustomers,
-    confirm, document, window
+    $,
+    api,
+    toast,
+    setMessage,
+    busy,
+    esc,
+    badge,
+    validateName,
+    validateEmail,
+    validatePhone,
+    validateText,
+    closeModal,
+    loadDashboard,
+    updateCustomerSelectors,
+    itemSummary,
+    fmtDateTime,
+    fmtDate,
+    getCustomers: appState.getCustomers,
+    setCustomers: appState.setCustomers,
+    confirm,
+    document,
+    window
 });
 const pickupUi = window.XTechPickupUi.createPickupUi({
-    $, api, toast, setMessage, busy, esc, badge, todayYMD, within, fmtDateTime, fmtDate,
-    validateFutureDate, validateText, validatePositiveWholeNumber, getProfile: () => profile,
-    productById, customerNameFor, itemSummary, ensureFormData, mergeFormItem,
-    updateProductSelectors, updateCustomerSelectors, loadDashboard, loadInventory,
-    loadTransactions, setProducts: appState.setProducts,
-    getPickups: appState.getPickups, setPickups: appState.setPickups,
-    getPickupFormItems: appState.getPickupFormItems, setPickupFormItems: appState.setPickupFormItems,
-    confirm, window
+    $,
+    api,
+    toast,
+    setMessage,
+    busy,
+    esc,
+    badge,
+    todayYMD,
+    within,
+    fmtDateTime,
+    fmtDate,
+    validateFutureDate,
+    validateText,
+    validatePositiveWholeNumber,
+    getProfile: () => profile,
+    productById,
+    customerNameFor,
+    itemSummary,
+    ensureFormData,
+    mergeFormItem,
+    updateProductSelectors,
+    updateCustomerSelectors,
+    loadDashboard,
+    loadInventory,
+    loadTransactions,
+    setProducts: appState.setProducts,
+    getPickups: appState.getPickups,
+    setPickups: appState.setPickups,
+    getPickupFormItems: appState.getPickupFormItems,
+    setPickupFormItems: appState.setPickupFormItems,
+    confirm,
+    window
 });
-async function loadCustomers() { return customerUi.loadCustomers(); }
-async function loadPickups() { return pickupUi.loadPickups(); }
+async function loadCustomers() {
+    return customerUi.loadCustomers();
+}
+async function loadPickups() {
+    return pickupUi.loadPickups();
+}
 
 // Stage 4.37: register sales handlers, preserving existing API and shared refresh functions.
 if (!window.XTechSalesUi) throw new Error("XTECH sales UI module is missing. Check script order.");
 const salesUi = window.XTechSalesUi.createSalesUi({
-    $, api, toast, setMessage, busy, esc, badge, within, fmtDateTime, customerNameFor,
-    itemSummary, productById, validatePositiveWholeNumber, mergeFormItem, validateText,
-    updateCustomerSelectors, updateProductSelectors, loadInventory, loadTransactions, loadDashboard,
-    ensureFormData, confirm, window
+    $,
+    api,
+    toast,
+    setMessage,
+    busy,
+    esc,
+    badge,
+    within,
+    fmtDateTime,
+    customerNameFor,
+    itemSummary,
+    productById,
+    validatePositiveWholeNumber,
+    mergeFormItem,
+    validateText,
+    updateCustomerSelectors,
+    updateProductSelectors,
+    loadInventory,
+    loadTransactions,
+    loadDashboard,
+    ensureFormData,
+    confirm,
+    window
 });
-async function loadSales() { return salesUi.loadSales(); }
+async function loadSales() {
+    return salesUi.loadSales();
+}
 
 // Stage 4.38: isolated staff account UI; app.js retains session ownership.
 if (!window.XTechStaffUi) throw new Error("XTECH staff UI module is missing. Check script order.");
 const staffUi = window.XTechStaffUi.createStaffUi({
-    $, api, toast, setMessage, busy, esc, badge, roleDisplayName,
-    validateName, validateEmail, validatePassword, validationError,
-    getCurrentUser: () => currentUser, confirm, window
+    $,
+    api,
+    toast,
+    setMessage,
+    busy,
+    esc,
+    badge,
+    roleDisplayName,
+    validateName,
+    validateEmail,
+    validatePassword,
+    validationError,
+    getCurrentUser: () => currentUser,
+    confirm,
+    window
 });
-async function loadUsers() { return staffUi.loadUsers(); }
+async function loadUsers() {
+    return staffUi.loadUsers();
+}
 
 // Stage 4.38: account security uses fresh authentication state via getters.
-if (!window.XTechSecurityUi) throw new Error("XTECH security UI module is missing. Check script order.");
+if (!window.XTechSecurityUi)
+    throw new Error("XTECH security UI module is missing. Check script order.");
 const securityUi = window.XTechSecurityUi.createSecurityUi({
-    $, toast, setMessage, busy, roleDisplayName, validationError,
-    validateText, validateNewPassword,
-    getCurrentUser: () => currentUser, getProfile: () => profile,
-    getFirebaseAuthApi: authSessionState.getFirebaseAuthApi, getFirebaseAuthInstance: authSessionState.getFirebaseAuthInstance
+    $,
+    toast,
+    setMessage,
+    busy,
+    roleDisplayName,
+    validationError,
+    validateText,
+    validateNewPassword,
+    getCurrentUser: () => currentUser,
+    getProfile: () => profile,
+    getFirebaseAuthApi: authSessionState.getFirebaseAuthApi,
+    getFirebaseAuthInstance: authSessionState.getFirebaseAuthInstance
 });
-function loadSecurity() { return securityUi.loadSecurity(); }
-function resetPasswordChangeMfa() { return securityUi.resetPasswordChangeMfa(); }
+function loadSecurity() {
+    return securityUi.loadSecurity();
+}
+function resetPasswordChangeMfa() {
+    return securityUi.resetPasswordChangeMfa();
+}
 
 // Stage 4.38: customer profile UI; API and authenticated session remain shared.
-if (!window.XTechProfileUi) throw new Error("XTECH profile UI module is missing. Check script order.");
+if (!window.XTechProfileUi)
+    throw new Error("XTECH profile UI module is missing. Check script order.");
 const profileUi = window.XTechProfileUi.createProfileUi({
-    $, api, toast, setMessage, busy, validateName, validatePhone, validateText,
+    $,
+    api,
+    toast,
+    setMessage,
+    busy,
+    validateName,
+    validatePhone,
+    validateText,
     getCurrentUser: () => currentUser
 });
-async function loadProfile() { return profileUi.loadProfile(); }
+async function loadProfile() {
+    return profileUi.loadProfile();
+}
 
 // Stage 4.37: dashboard owns its Chart.js instances and refresh action.
-if (!window.XTechDashboardUi) throw new Error("XTECH dashboard UI module is missing. Check script order.");
+if (!window.XTechDashboardUi)
+    throw new Error("XTECH dashboard UI module is missing. Check script order.");
 const dashboardUi = window.XTechDashboardUi.createDashboardUi({
-    $, api, toast, esc, badge, stockStatus, document,
+    $,
+    api,
+    toast,
+    esc,
+    badge,
+    stockStatus,
+    document,
     makeChart: (element, options) => new Chart(element, options)
 });
-async function loadDashboard() { return dashboardUi.loadDashboard(); }
+async function loadDashboard() {
+    return dashboardUi.loadDashboard();
+}
 
 // Stage 4.37: reports maintain a private cache and share the app's loading counter.
-if (!window.XTechReportsUi) throw new Error("XTECH reports UI module is missing. Check script order.");
+if (!window.XTechReportsUi)
+    throw new Error("XTECH reports UI module is missing. Check script order.");
 const reportsUi = window.XTechReportsUi.createReportsUi({
-    $, api, toast, esc, fmtDateTime, fmtDate, stockStatus, movementTypeLabel,
-    getProfile: () => profile, getCurrentUser: () => currentUser, getToken: () => token,
+    $,
+    api,
+    toast,
+    esc,
+    fmtDateTime,
+    fmtDate,
+    stockStatus,
+    movementTypeLabel,
+    getProfile: () => profile,
+    getCurrentUser: () => currentUser,
+    getToken: () => token,
     onPendingChange: changePending,
-    document, fetch: (...args) => fetch(...args), URL, URLSearchParams, setTimeout
+    document,
+    fetch: (...args) => fetch(...args),
+    URL,
+    URLSearchParams,
+    setTimeout
 });
-async function loadReports() { return reportsUi.loadReports(); }
+async function loadReports() {
+    return reportsUi.loadReports();
+}
 
 // Stage 4.40: AI Assistant UI keeps chat state private; session/page identity stays in app.js.
-if (!window.XTechAiAssistantUi) throw new Error("XTECH AI Assistant UI module is missing. Check script order.");
+if (!window.XTechAiAssistantUi)
+    throw new Error("XTECH AI Assistant UI module is missing. Check script order.");
 const aiAssistantUi = window.XTechAiAssistantUi.createAiAssistantUi({
-    $, api, toast, busy, document, window, navigator, setTimeout, console,
-    getCurrentUser: () => currentUser, getCurrentSectionName: () => currentSectionName
+    $,
+    api,
+    toast,
+    busy,
+    document,
+    window,
+    navigator,
+    setTimeout,
+    console,
+    getCurrentUser: () => currentUser,
+    getCurrentSectionName: () => currentSectionName
 });
-function updateAiContextLabel() { return aiAssistantUi.updateAiContextLabel(); }
-function renderAiQuickActions() { return aiAssistantUi.renderAiQuickActions(); }
-function resetChatPanel() { return aiAssistantUi.resetChatPanel(); }
+function updateAiContextLabel() {
+    return aiAssistantUi.updateAiContextLabel();
+}
+function renderAiQuickActions() {
+    return aiAssistantUi.renderAiQuickActions();
+}
+function resetChatPanel() {
+    return aiAssistantUi.resetChatPanel();
+}
 
 // Stage 4.39: customer notification UI is registered before the app boots.
-if (!window.XTechNotificationUi) throw new Error("XTECH notification UI module is missing. Check script order.");
+if (!window.XTechNotificationUi)
+    throw new Error("XTECH notification UI module is missing. Check script order.");
 const notificationUi = window.XTechNotificationUi.createNotificationUi({
-    $, api, toast, esc, fmtDateTime, getProfile: () => profile, showSection,
-    document, setInterval, clearInterval
+    $,
+    api,
+    toast,
+    esc,
+    fmtDateTime,
+    getProfile: () => profile,
+    showSection,
+    document,
+    setInterval,
+    clearInterval
 });
 
 boot();
