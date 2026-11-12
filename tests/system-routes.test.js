@@ -21,36 +21,48 @@ function createHarness(overrides = {}) {
             registered.set(url, handlers);
         }
     };
-    const authRequired = overrides.authRequired || ((req, res, next) => {
-        if (req.headers.authorization !== "Bearer valid") {
-            return res.status(401).json({ success: false, message: "Authentication required." });
-        }
-        next();
-    });
-    const roles = overrides.roles || ((...allowed) => (req, res, next) => {
-        if (!allowed.includes(req.profile?.role)) {
-            return res.status(403).json({ success: false, message: "You do not have permission for this action." });
-        }
-        next();
-    });
-    const getDb = overrides.getDb || (() => {
-        dbReads++;
-        return {
-            collection(collectionName) {
-                assert.equal(collectionName, "test");
-                return {
-                    doc(documentId) {
-                        assert.equal(documentId, "connection");
-                        return {
-                            async set(data) {
-                                writes.push(data);
-                            }
-                        };
-                    }
-                };
+    const authRequired =
+        overrides.authRequired ||
+        ((req, res, next) => {
+            if (req.headers.authorization !== "Bearer valid") {
+                return res
+                    .status(401)
+                    .json({ success: false, message: "Authentication required." });
             }
-        };
-    });
+            next();
+        });
+    const roles =
+        overrides.roles ||
+        ((...allowed) =>
+            (req, res, next) => {
+                if (!allowed.includes(req.profile?.role)) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "You do not have permission for this action."
+                    });
+                }
+                next();
+            });
+    const getDb =
+        overrides.getDb ||
+        (() => {
+            dbReads++;
+            return {
+                collection(collectionName) {
+                    assert.equal(collectionName, "test");
+                    return {
+                        doc(documentId) {
+                            assert.equal(documentId, "connection");
+                            return {
+                                async set(data) {
+                                    writes.push(data);
+                                }
+                            };
+                        }
+                    };
+                }
+            };
+        });
     registerSystemRoutes(app, {
         authRequired,
         roles,
@@ -69,12 +81,20 @@ async function execute(routeHandlers, req = {}) {
     const res = {
         statusCode: 200,
         payload: undefined,
-        status(code) { this.statusCode = code; return this; },
-        json(payload) { this.payload = payload; return this; }
+        status(code) {
+            this.statusCode = code;
+            return this;
+        },
+        json(payload) {
+            this.payload = payload;
+            return this;
+        }
     };
     for (const handler of routeHandlers) {
         let nextCalled = false;
-        await handler(request, res, () => { nextCalled = true; });
+        await handler(request, res, () => {
+            nextCalled = true;
+        });
         if (!nextCalled) break;
     }
     return res;
@@ -82,11 +102,7 @@ async function execute(routeHandlers, req = {}) {
 
 test("registers exactly the three existing system GET endpoints", () => {
     const { registered } = createHarness();
-    assert.deepEqual([...registered.keys()], [
-        "/api/status",
-        "/api/config",
-        "/api/firebase-test"
-    ]);
+    assert.deepEqual([...registered.keys()], ["/api/status", "/api/config", "/api/firebase-test"]);
 });
 
 test("status endpoint returns a successful message and ISO timestamp", async () => {
@@ -103,8 +119,14 @@ test("config endpoint returns its original public configuration keys", async () 
     const response = await execute(registered.get("/api/config"));
     assert.equal(response.statusCode, 200);
     assert.deepEqual(Object.keys(response.payload), [
-        "apiKey", "authDomain", "projectId", "storageBucket",
-        "messagingSenderId", "appId", "adminEmail", "adminMfaBypass"
+        "apiKey",
+        "authDomain",
+        "projectId",
+        "storageBucket",
+        "messagingSenderId",
+        "appId",
+        "adminEmail",
+        "adminMfaBypass"
     ]);
     assert.equal(typeof response.payload.adminMfaBypass, "boolean");
 });
@@ -145,10 +167,12 @@ test("Firebase test route writes its existing test document for admins", async (
         message: "Firebase is connected!"
     });
     assert.equal(harness.dbReads(), 1);
-    assert.deepEqual(harness.writes, [{
-        message: "Firebase connection successful",
-        timestamp: FIXED_TIMESTAMP
-    }]);
+    assert.deepEqual(harness.writes, [
+        {
+            message: "Firebase connection successful",
+            timestamp: FIXED_TIMESTAMP
+        }
+    ]);
 });
 
 test("Firebase test route returns HTTP 500 on a Firestore error", async () => {
@@ -160,7 +184,9 @@ test("Firebase test route returns HTTP 500 on a Firestore error", async () => {
             getDb: () => ({
                 collection: () => ({
                     doc: () => ({
-                        set: async () => { throw new Error("Simulated Firestore failure"); }
+                        set: async () => {
+                            throw new Error("Simulated Firestore failure");
+                        }
                     })
                 })
             })

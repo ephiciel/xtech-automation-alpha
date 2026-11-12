@@ -12,9 +12,7 @@ let servicesPromise = null;
 
 function loadServiceAccount() {
     const fromEnv = String(
-        process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
-        process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
-        ""
+        process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON || ""
     ).trim();
 
     let serviceAccount;
@@ -23,10 +21,9 @@ function loadServiceAccount() {
         try {
             serviceAccount = JSON.parse(fromEnv);
         } catch (error) {
-            throw new Error(
-                `GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: ${error.message}`,
-                { cause: error }
-            );
+            throw new Error(`GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: ${error.message}`, {
+                cause: error
+            });
         }
     } else {
         const isCloudflareWorker = process.env.CLOUDFLARE_WORKER === "true";
@@ -47,10 +44,9 @@ function loadServiceAccount() {
         try {
             serviceAccount = JSON.parse(fs.readFileSync(localKeyPath, "utf8"));
         } catch (error) {
-            throw new Error(
-                `Could not load Firebase service account: ${error.message}`,
-                { cause: error }
-            );
+            throw new Error(`Could not load Firebase service account: ${error.message}`, {
+                cause: error
+            });
         }
     }
 
@@ -80,7 +76,8 @@ async function initFirebase() {
         const auth = getAuth(adminApp);
 
         const cloudflareAppModule = await import("@ljoukov/firebase-admin-cloudflare/app");
-        const cloudflareFirestoreModule = await import("@ljoukov/firebase-admin-cloudflare/firestore");
+        const cloudflareFirestoreModule =
+            await import("@ljoukov/firebase-admin-cloudflare/firestore");
 
         const firestoreApp = cloudflareAppModule.initializeApp({
             serviceAccountJson: JSON.stringify(serviceAccount)

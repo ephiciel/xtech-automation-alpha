@@ -30,7 +30,11 @@ function harness(options = {}) {
                                 if (options.dbFailure) throw new Error("database unavailable");
                                 return options.missingProfile
                                     ? { exists: false }
-                                    : { exists: true, data: () => options.profile || { role: "warehouse", active: true } };
+                                    : {
+                                          exists: true,
+                                          data: () =>
+                                              options.profile || { role: "warehouse", active: true }
+                                      };
                             }
                         };
                     }
@@ -38,18 +42,28 @@ function harness(options = {}) {
             }
         };
     };
-    const normalize = role => role === "owner" ? "admin" : (role || "customer");
+    const normalize = (role) => (role === "owner" ? "admin" : role || "customer");
     const { authRequired, roles } = createAuthMiddleware({
-        getAuth, getDb, normalizedRole: normalize,
+        getAuth,
+        getDb,
+        normalizedRole: normalize,
         logger: { error: (...args) => calls.log.push(args) }
     });
     const response = {
         code: 200,
         payload: undefined,
-        status(code) { this.code = code; return this; },
-        json(body) { this.payload = body; return this; }
+        status(code) {
+            this.code = code;
+            return this;
+        },
+        json(body) {
+            this.payload = body;
+            return this;
+        }
     };
-    const next = () => { calls.next++; };
+    const next = () => {
+        calls.next++;
+    };
     return { authRequired, roles, calls, response, next };
 }
 

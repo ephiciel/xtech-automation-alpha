@@ -1,87 +1,90 @@
 name: XTECH Quality Checks
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-  workflow_dispatch:
+    pull_request:
+        branches: [main]
+    push:
+        branches: [main]
+    workflow_dispatch:
 
 permissions:
-  contents: read
+    contents: read
 
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    group: quality-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Lint, format, and test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+    quality:
+        name: Lint, format, and test
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - name: Check out source
+              uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: npm
 
-      - name: Install dependencies from lockfile
-        run: npm ci
+            - name: Install dependencies from lockfile
+              run: npm ci
 
-      - name: ESLint
-        run: npm run lint
+            - name: ESLint
+              run: npm run lint
 
-      - name: Formatting (readability-edited files)
-        run: >-
-          npx prettier --check
-          backend/server.js
-          backend/middleware/auth.js
-          "backend/routes/*.routes.js"
-          "backend/utils/*.js"
-          frontend/js/sidebar-toggle.js
-          frontend/js/shared-utils.js
-          frontend/js/auth-client.js
-          frontend/js/inventory-ui.js
-          frontend/js/customer-ui.js
-          frontend/js/pickup-ui.js
-          frontend/js/sales-ui.js
-          frontend/js/dashboard-ui.js
-          frontend/js/reports-ui.js
-          frontend/js/staff-ui.js
-          frontend/js/security-ui.js
-          frontend/js/profile-ui.js
-          frontend/js/auth-ui.js
-          frontend/js/notification-ui.js
-          frontend/js/ai-assistant-ui.js
-          frontend/js/app-shell-ui.js
-          frontend/js/app-state.js
-          frontend/js/auth-session-state.js
-          frontend/js/app-lifecycle.js
-          frontend/js/ui-feedback.js
-          frontend/js/api-client.js
-          scripts/release-audit.js
-          tests/frontend-release-candidate.test.js
+            - name: Full supported codebase formatting
+              run: npm run format:source:check
 
-      - name: Static project validation
-        run: npm test
+            - name: Formatting (readability-edited files)
+              run: >-
+                  npx prettier --check
+                  backend/server.js
+                  backend/middleware/auth.js
+                  "backend/routes/*.routes.js"
+                  "backend/utils/*.js"
+                  frontend/js/sidebar-toggle.js
+                  frontend/js/shared-utils.js
+                  frontend/js/auth-client.js
+                  frontend/js/inventory-ui.js
+                  frontend/js/customer-ui.js
+                  frontend/js/pickup-ui.js
+                  frontend/js/sales-ui.js
+                  frontend/js/dashboard-ui.js
+                  frontend/js/reports-ui.js
+                  frontend/js/staff-ui.js
+                  frontend/js/security-ui.js
+                  frontend/js/profile-ui.js
+                  frontend/js/auth-ui.js
+                  frontend/js/notification-ui.js
+                  frontend/js/ai-assistant-ui.js
+                  frontend/js/app-shell-ui.js
+                  frontend/js/app-state.js
+                  frontend/js/auth-session-state.js
+                  frontend/js/app-lifecycle.js
+                  frontend/js/ui-feedback.js
+                  frontend/js/api-client.js
+                  scripts/release-audit.js
+                  tests/frontend-release-candidate.test.js
 
-      - name: Release-candidate safety audit (read-only)
-        run: npm run test:release-audit
+            - name: Static project validation
+              run: npm test
 
-      - name: Unit tests
-        run: npm run test:unit
+            - name: Release-candidate safety audit (read-only)
+              run: npm run test:release-audit
 
-      - name: Integration tests
-        run: npm run test:integration
+            - name: Unit tests
+              run: npm run test:unit
 
-      - name: Staging isolation tests (mocked, no credentials)
-        run: npm run test:staging-isolation
+            - name: Integration tests
+              run: npm run test:integration
 
-      - name: Staging preflight tests (mocked, no credentials)
-        run: npm run test:staging-preflight
+            - name: Staging isolation tests (mocked, no credentials)
+              run: npm run test:staging-isolation
+
+            - name: Staging preflight tests (mocked, no credentials)
+              run: npm run test:staging-preflight

@@ -210,9 +210,12 @@ test("HTML loads shell after AI but before application", () => {
 });
 test("app retains session and API ownership and delegates shell methods", () => {
     assert.match(appCode, /const appShellUi = window\.XTechAppShellUi\.createAppShellUi/);
-    assert.match(appCode, /function showSection\(name\).*appShellUi\.showSection/);
-    assert.match(appCode, /function applyRole\(\).*appShellUi\.applyRole/);
-    assert.match(appCode, /function closeModal\(\).*appShellUi\.closeModal/);
+    assert.match(
+        appCode,
+        /function showSection\(name\)\s*\{\s*return appShellUi\.showSection\(name\);\s*\}/
+    );
+    assert.match(appCode, /function applyRole\(\)\s*\{\s*return appShellUi\.applyRole\(\);\s*\}/);
+    assert.match(appCode, /function closeModal\(\)\s*\{\s*return appShellUi\.closeModal\(\);\s*\}/);
     assert.match(appCode, /async function finishSignedInUser/);
     assert.match(appCode, /function showSignedOutState/);
     assert.match(appCode, /async function boot/);

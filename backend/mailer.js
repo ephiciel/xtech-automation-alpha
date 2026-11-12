@@ -15,10 +15,14 @@ function otpResendSeconds() {
 
 function getResendConfig() {
     const apiKey = String(process.env.RESEND_API_KEY || "").trim();
-    const from = String(process.env.MAIL_FROM || "XTECH Automation <no-reply@xtech-automation.com>").trim();
+    const from = String(
+        process.env.MAIL_FROM || "XTECH Automation <no-reply@xtech-automation.com>"
+    ).trim();
 
     if (!apiKey) {
-        throw new Error("Email OTP is not configured. Add RESEND_API_KEY to the server environment.");
+        throw new Error(
+            "Email OTP is not configured. Add RESEND_API_KEY to the server environment."
+        );
     }
 
     return { apiKey, from };

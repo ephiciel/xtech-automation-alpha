@@ -1,49 +1,45 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "xtech-api",
-  "main": "worker/production.mjs",
-  "compatibility_date": "2026-10-30",
-  "upload_source_maps": false,
-  "routes": [
-    {
-      "pattern": "xtech-automation.com/*",
-      "zone_name": "xtech-automation.com"
-    }
-  ],
-  "vars": {
-    "CLOUDFLARE_WORKER": "true",
-    "PORT": "3000"
-  },
-  "assets": {
-    "directory": "./frontend",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": [
-      "/api",
-      "/api/*",
-      "/__xtech_direct/*"
-    ]
-  },
-  "exports": {
-    "XtechBackend": {
-      "type": "durable-object",
-      "storage": "sqlite"
-    },
-    "XtechBackendV2": {
-      "type": "durable-object",
-      "storage": "sqlite"
-    }
-  },
-  "observability": {
-    "enabled": true
-  },
-  "previews": {
+    "$schema": "./node_modules/wrangler/config-schema.json",
+    "name": "xtech-api",
+    "main": "worker/production.mjs",
+    "compatibility_date": "2026-10-30",
+    "upload_source_maps": false,
+    "routes": [
+        {
+            "pattern": "xtech-automation.com/*",
+            "zone_name": "xtech-automation.com"
+        }
+    ],
     "vars": {
-      "CLOUDFLARE_WORKER": "true",
-      "PORT": "3000",
-      "XTECH_ENV": "staging",
-      "XTECH_STAGING_FIREBASE_PROJECT_ID": "xtech-automation-staging",
-      "FIREBASE_PROJECT_ID": "xtech-automation-staging"
+        "CLOUDFLARE_WORKER": "true",
+        "PORT": "3000"
+    },
+    "assets": {
+        "directory": "./frontend",
+        "binding": "ASSETS",
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/api", "/api/*", "/__xtech_direct/*"]
+    },
+    "exports": {
+        "XtechBackend": {
+            "type": "durable-object",
+            "storage": "sqlite"
+        },
+        "XtechBackendV2": {
+            "type": "durable-object",
+            "storage": "sqlite"
+        }
+    },
+    "observability": {
+        "enabled": true
+    },
+    "previews": {
+        "vars": {
+            "CLOUDFLARE_WORKER": "true",
+            "PORT": "3000",
+            "XTECH_ENV": "staging",
+            "XTECH_STAGING_FIREBASE_PROJECT_ID": "xtech-automation-staging",
+            "FIREBASE_PROJECT_ID": "xtech-automation-staging"
+        }
     }
-  }
 }
