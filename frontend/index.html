@@ -10,6 +10,7 @@
         <!-- Loads the XTECH design styles -->
         <link rel="stylesheet" href="css/style.css" />
         <link rel="stylesheet" href="css/landing.css" />
+        <link rel="stylesheet" href="css/customer-products.css" />
         <link rel="stylesheet" href="css/product-lightbox.css" />
         <!-- Connection hints for Firebase and dashboard libraries; scripts remain unchanged. -->
         <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -571,6 +572,9 @@
                     <button class="nav" data-section="inventory">Inventory Management</button>
                     <button class="nav" data-section="transactions">Stock Movement History</button>
                     <button class="nav" data-section="customers">Customer Management</button>
+                    <button class="nav customer-only" data-section="customerProducts">
+                        View Products
+                    </button>
                     <button class="nav" data-section="pickups">Pickup Services</button>
                     <button class="nav" data-section="notifications">Notifications</button>
                     <button class="nav" data-section="sales">Sales Transactions</button>
@@ -582,6 +586,34 @@
 
                 <!-- Contains all pages shown inside the application -->
                 <main class="content">
+                    <!-- Customers can browse product photos without editing inventory. -->
+                    <section id="customerProducts" class="section customer-only-section">
+                        <div class="page-head">
+                            <div>
+                                <h1>View Products</h1>
+                                <p>See product photos and details before requesting a pickup.</p>
+                            </div>
+                        </div>
+                        <div class="customer-catalog-tools">
+                            <input
+                                id="customerProductsSearch"
+                                type="search"
+                                placeholder="Search products or categories"
+                                maxlength="120"
+                                aria-label="Search products"
+                            />
+                            <span
+                                id="customerProductsCount"
+                                class="customer-catalog-count"
+                                aria-live="polite"
+                            ></span>
+                        </div>
+                        <div
+                            id="customerProductsGrid"
+                            class="customer-catalog-grid"
+                            aria-live="polite"
+                        ></div>
+                    </section>
                     <!-- Shows system totals, charts, and recent activity -->
                     <section id="dashboard" class="section active">
                         <div class="page-head">
@@ -1657,6 +1689,7 @@
         <script src="js/auth-session-state.js"></script>
         <script src="js/app-lifecycle.js"></script>
         <script src="js/ui-feedback.js"></script>
+        <script src="js/customer-products-ui.js"></script>
         <script src="js/app.js"></script>
         <script src="js/sidebar-toggle.js" defer></script>
     </body>

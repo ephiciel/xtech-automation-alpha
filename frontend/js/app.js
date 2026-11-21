@@ -258,6 +258,33 @@ function syncPickupQuantityLimit() {
     return pickupUi.syncPickupQuantityLimit();
 }
 
+// Browsing products reuses authenticated inventory data and never changes stock.
+if (!window.XTechCustomerProductsUi) {
+    throw new Error("XTECH customer catalogue module is missing. Check script order.");
+}
+const customerProductsUi = window.XTechCustomerProductsUi.createCustomerProductsUi({
+    $,
+    api,
+    toast,
+    getProfile: () => profile,
+    onRequestPickup: async (productID) => {
+        if (profile?.role !== "customer") return;
+        await showSection("pickups");
+        await pickupUi.refreshPickupInventory();
+        const picker = $("pickupProduct");
+        if (!Array.from(picker.options).some((option) => option.value === productID)) {
+            toast("This product is no longer available for pickup.");
+            return;
+        }
+        picker.value = productID;
+        picker.dispatchEvent(new window.Event("change", { bubbles: true }));
+        $("pickupQuantity")?.focus();
+    }
+});
+async function loadCustomerProducts() {
+    return customerProductsUi.loadCustomerProducts();
+}
+
 // Stage 4.41: shared page shell owns navigation, role visibility, theme, and modal controls.
 if (!window.XTechAppShellUi)
     throw new Error("XTECH application shell is missing. Check script order.");
@@ -280,6 +307,7 @@ const appShellUi = window.XTechAppShellUi.createAppShellUi({
     loadTransactions,
     loadCustomers,
     loadPickups,
+    loadCustomerProducts,
     loadNotifications,
     loadSales,
     loadUsers,

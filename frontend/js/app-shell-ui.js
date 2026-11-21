@@ -19,6 +19,7 @@
             loadTransactions,
             loadCustomers,
             loadPickups,
+            loadCustomerProducts,
             loadNotifications,
             loadSales,
             loadUsers,
@@ -46,7 +47,8 @@
             if (name === "inventory") loadInventory();
             if (name === "transactions") loadTransactions();
             if (name === "customers") loadCustomers();
-            if (name === "pickups") loadPickups();
+            if (name === "customerProducts") loadCustomerProducts();
+            if (name === "pickups") return loadPickups();
             if (name === "notifications") loadNotifications({ silent: true });
             if (name === "sales") loadSales();
             if (name === "users") loadUsers();
@@ -81,7 +83,7 @@
                     "security"
                 ],
                 warehouse: ["dashboard", "inventory", "transactions", "security"],
-                customer: ["pickups", "notifications", "profile", "security"]
+                customer: ["customerProducts", "pickups", "notifications", "profile", "security"]
             };
             const allowed = new Set(allowedSections[role] || []);
             document
