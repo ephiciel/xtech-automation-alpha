@@ -19,7 +19,6 @@
             finishSignedInUser,
             getFirebaseAuthApi,
             getFirebaseAuthInstance,
-            getAppConfig,
             document,
             window,
             setInterval,
@@ -382,12 +381,19 @@
                         factor.factorId === getFirebaseAuthApi().TotpMultiFactorGenerator.FACTOR_ID
                 );
 
-                const adminMfaBypass =
-                    getAppConfig().adminMfaBypass === true &&
-                    credential.user.email?.toLowerCase() ===
-                        getAppConfig().adminEmail?.toLowerCase();
+                // Password-only exceptions for these four specific XTECH accounts.
+                // Other accounts must enroll an Authenticator if one is not already set up.
+                // Firebase still enforces MFA for any account with an enrolled factor.
+                const passwordOnlyEmails = new Set([
+                    "admin@xtech-automation.com",
+                    "secretary@xtech-automation.com",
+                    "warehouse@xtech-automation.com",
+                    "customer@xtech-automation.com"
+                ]);
+                const signedInEmail = String(credential.user.email || "").trim().toLowerCase();
+                const passwordOnlyBypass = passwordOnlyEmails.has(signedInEmail);
 
-                if (!hasTotp && !adminMfaBypass) {
+                if (!hasTotp && !passwordOnlyBypass) {
                     await beginTotpEnrollment(credential.user);
                     return;
                 }
