@@ -35,6 +35,13 @@
             confirm
         } = deps;
 
+        // Only HTTPS photos are added to HTML; esc() escapes their attribute values.
+        function productPhoto(product) {
+            const src = typeof product?.imageUrl === "string" ? product.imageUrl : "";
+            if (!/^https:\/\//i.test(src)) return "—";
+            return `<img data-product-image alt="Product" loading="lazy" referrerpolicy="no-referrer" width="60" height="60" style="object-fit:cover;border-radius:6px" src="${esc(src)}">`;
+        }
+
         // Handles inventory products and stock actions
         // Loads active products from the backend
         async function loadInventory() {
@@ -78,12 +85,13 @@
                       .map(
                           (product) => `<tr>
                 <td><strong>${esc(product.productID)}</strong></td><td>${esc(product.productName)}</td><td>${esc(product.category)}</td>
+                <td>${productPhoto(product)}</td>
                 <td>${badge(stockStatus(product))}</td>
                 <td>${canManage ? `<button class="small-btn secondary" onclick="editProduct('${esc(product.productID)}')">Edit</button><button class="small-btn ghost dark-ghost" onclick="archiveProduct('${esc(product.productID)}')">Archive</button>` : "—"}</td>
             </tr>`
                       )
                       .join("")
-                : '<tr><td colspan="5"><div class="table-empty">No products match the current filters.</div></td></tr>';
+                : '<tr><td colspan="6"><div class="table-empty">No products match the current filters.</div></td></tr>';
         }
 
         ["productSearch", "categoryFilter", "statusFilter"].forEach((id) =>
@@ -115,6 +123,7 @@
                                 unit: "",
                                 quantity: 0,
                                 reorderLevel: 0,
+                                imageUrl: $("productImageUrl").value.trim() || null,
                                 description
                             })
                         }),
@@ -137,6 +146,7 @@
               <form id="editProductForm" class="form-grid">
                 <label>Product Name<input id="editProductName" value="${esc(product.productName)}" required></label>
                 <label>Category<select id="editProductCategory"><option ${product.category === "Industrial Chemical" ? "selected" : ""}>Industrial Chemical</option><option ${product.category === "Janitorial Chemical" ? "selected" : ""}>Janitorial Chemical</option><option ${product.category === "Cleaning Supply" ? "selected" : ""}>Cleaning Supply</option><option ${product.category === "Other" ? "selected" : ""}>Other</option></select></label>
+                <label class="wide">Product picture URL (HTTPS)<input type="url" maxlength="2048" id="editProductImageUrl" value="${esc(/^https:\/\//i.test(product.imageUrl || "") ? product.imageUrl : "")}" placeholder="https://example.com/product.jpg"></label>
                 <label class="wide">Description<textarea id="editProductDescription">${esc(product.description || "")}</textarea></label>
                 <button class="primary wide">Save Product Changes</button>
               </form>`;
@@ -162,6 +172,15 @@
                                     category,
                                     unit: product.unit || "",
                                     reorderLevel: Number(product.reorderLevel || 0),
+                                    // Existing non-HTTPS image references are preserved untouched.
+                                    ...(/^https:\/\//i.test(product.imageUrl || "")
+                                        ? {
+                                              imageUrl:
+                                                  $("editProductImageUrl").value.trim() || null
+                                          }
+                                        : $("editProductImageUrl").value.trim()
+                                          ? { imageUrl: $("editProductImageUrl").value.trim() }
+                                          : {}),
                                     description
                                 })
                             }),

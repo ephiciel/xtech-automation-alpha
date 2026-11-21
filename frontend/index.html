@@ -9,6 +9,7 @@
         <link rel="icon" type="image/png" href="/xtech-favicon-XTA.png" />
         <!-- Loads the XTECH design styles -->
         <link rel="stylesheet" href="css/style.css" />
+        <link rel="stylesheet" href="css/product-lightbox.css" />
         <!-- Connection hints for Firebase and dashboard libraries; scripts remain unchanged. -->
         <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
         <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -516,6 +517,7 @@
                                             <th>Product ID</th>
                                             <th>Product Name</th>
                                             <th>Category</th>
+                                            <th>Picture</th>
                                             <th>Stock Status</th>
                                             <th>Actions</th>
                                         </tr>
@@ -553,6 +555,13 @@
                                         <option>Other</option>
                                     </select></label
                                 >
+                                <label class="wide"
+                                    >Product picture URL (HTTPS)<input
+                                        id="productImageUrl"
+                                        type="url"
+                                        maxlength="2048"
+                                        placeholder="https://example.com/product.jpg"
+                                /></label>
                                 <label class="wide"
                                     >Product Description<textarea
                                         id="description"
@@ -765,6 +774,7 @@
                                             Add Product
                                         </button>
                                     </div>
+                                    <div id="pickupProductPreview" class="helper-text"></div>
                                     <p id="pickupStockHint" class="helper-text">
                                         Select a product to view the current admin inventory
                                         quantity.
@@ -1443,6 +1453,7 @@
         <script src="js/inventory-ui.js"></script>
         <script src="js/customer-ui.js"></script>
         <script src="js/pickup-ui.js"></script>
+        <script src="js/product-lightbox.js"></script>
         <script src="js/sales-ui.js"></script>
         <script src="js/dashboard-ui.js"></script>
         <script src="js/reports-ui.js"></script>

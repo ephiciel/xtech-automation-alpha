@@ -37,6 +37,12 @@
             window
         } = deps;
 
+        function pickupPhoto(product, size = 40) {
+            const src = typeof product?.imageUrl === "string" ? product.imageUrl : "";
+            if (!/^https:\/\//i.test(src)) return "";
+            return `<img data-product-image alt="Product" referrerpolicy="no-referrer" src="${esc(src)}" width="${size}" height="${size}" loading="lazy" style="object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px">`;
+        }
+
         // Displays the products added to a pickup request
         function renderPickupFormItems() {
             const container = $("pickupItemList");
@@ -46,7 +52,7 @@
                       .map((item) => {
                           const product = productById(item.productID);
                           return `<div class="item-row">
-                    <div><strong>${esc(product?.productName || item.productID)}</strong><small>${esc(item.productID)} · Available: ${Number(product?.quantity ?? 0)} ${esc(product?.unit || "units")}</small></div>
+                    <div>${pickupPhoto(product)}<strong>${esc(product?.productName || item.productID)}</strong><small>${esc(item.productID)} · Available: ${Number(product?.quantity ?? 0)} ${esc(product?.unit || "units")}</small></div>
                     <span>Requested: <strong>${item.quantity}</strong></span>
                     <button type="button" class="small-btn ghost dark-ghost" onclick="removePickupItem('${esc(item.productID)}')">Remove</button>
                 </div>`;
@@ -63,6 +69,8 @@
             if (!select || !input) return;
 
             const product = productById(select.value);
+            const preview = $("pickupProductPreview");
+            if (preview) preview.innerHTML = product ? pickupPhoto(product, 64) : "";
             if (!product) {
                 input.max = "1";
                 input.value = "1";
