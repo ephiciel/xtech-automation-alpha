@@ -5,6 +5,7 @@
  * No Firebase connection is created when this module is imported.
  * getDb is evaluated per request because Firebase initializes asynchronously.
  */
+const { normalizeProductImageUrl } = require("../utils/product-image-url");
 function registerInventoryRoutes(app, deps) {
     const {
         authRequired,
@@ -121,6 +122,13 @@ function registerInventoryRoutes(app, deps) {
                 });
             }
 
+            // Optional public HTTPS product photo; prices and stock rules are unchanged.
+            let imageUrl;
+            try {
+                imageUrl = normalizeProductImageUrl(req.body.imageUrl);
+            } catch (error) {
+                return res.status(400).json({ success: false, message: error.message });
+            }
             const ref = db.collection("products").doc(productID);
             if ((await ref.get()).exists) {
                 return res.status(409).json({
@@ -138,6 +146,7 @@ function registerInventoryRoutes(app, deps) {
                 quantity,
                 reorderLevel,
                 description: String(req.body.description || "").trim(),
+                imageUrl,
                 active: true,
                 createdAt: timestamp,
                 updatedAt: timestamp,
@@ -226,12 +235,22 @@ function registerInventoryRoutes(app, deps) {
                     });
                 }
 
+                // Do not overwrite an existing image when clients omit imageUrl.
+                const imagePatch = {};
+                if (Object.prototype.hasOwnProperty.call(req.body, "imageUrl")) {
+                    try {
+                        imagePatch.imageUrl = normalizeProductImageUrl(req.body.imageUrl);
+                    } catch (error) {
+                        return res.status(400).json({ success: false, message: error.message });
+                    }
+                }
                 await ref.update({
                     productName,
                     category,
                     unit: String(req.body.unit || "").trim(),
                     reorderLevel,
                     description: String(req.body.description || "").trim(),
+                    ...imagePatch,
                     updatedAt: now()
                 });
                 res.json({ success: true, message: "Product updated successfully." });

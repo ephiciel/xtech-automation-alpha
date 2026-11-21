@@ -1,0 +1,153 @@
+/* XTECH: Messenger-style product photo lightbox. */
+.xtech-lightbox-trigger {
+    cursor: zoom-in;
+}
+.xtech-lightbox-trigger:focus-visible {
+    outline: 3px solid #60a5fa;
+    outline-offset: 3px;
+}
+.xtech-lightbox[hidden],
+.xtech-lightbox [hidden] {
+    display: none !important;
+}
+.xtech-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    background: rgba(7, 10, 19, 0.975);
+    color: #f9fafb;
+    font-family:
+        system-ui,
+        -apple-system,
+        "Segoe UI",
+        sans-serif;
+    overscroll-behavior: contain;
+}
+.xtech-lightbox *,
+.xtech-lightbox *::before,
+.xtech-lightbox *::after {
+    box-sizing: border-box;
+}
+.xtech-lightbox__top {
+    min-height: 60px;
+    padding: 8px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+.xtech-lightbox__title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.xtech-lightbox__close,
+.xtech-lightbox__tools button {
+    appearance: none;
+    background: #242b3b;
+    color: #fff;
+    border: 1px solid #566071;
+    border-radius: 999px;
+    min-width: 44px;
+    height: 44px;
+    font-size: 23px;
+    cursor: pointer;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.xtech-lightbox__close {
+    font-size: 30px;
+}
+.xtech-lightbox button:hover {
+    background: #374151;
+}
+.xtech-lightbox button:focus-visible {
+    outline: 3px solid #93c5fd;
+    outline-offset: 2px;
+}
+.xtech-lightbox button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.xtech-lightbox__stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    overflow: hidden;
+    touch-action: none;
+    cursor: default;
+}
+.xtech-lightbox__stage.is-zoomed {
+    cursor: grab;
+}
+.xtech-lightbox__stage.is-zoomed:active {
+    cursor: grabbing;
+}
+.xtech-lightbox__image {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+    transform-origin: center;
+    will-change: transform;
+    pointer-events: none;
+}
+.xtech-lightbox__message {
+    color: #e5e7eb;
+    max-width: 30rem;
+    text-align: center;
+}
+.xtech-lightbox__tools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 68px;
+    padding: 8px 16px max(8px, env(safe-area-inset-bottom));
+}
+.xtech-lightbox__tools output {
+    min-width: 56px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    font-size: 14px;
+}
+.xtech-lightbox__tools button[data-lightbox-action="reset"] {
+    border-radius: 14px;
+    font-size: 14px;
+    padding: 0 14px;
+}
+@media (max-width: 480px) {
+    .xtech-lightbox__top {
+        min-height: 54px;
+    }
+    .xtech-lightbox__tools {
+        gap: 7px;
+        min-height: 62px;
+    }
+    .xtech-lightbox__stage {
+        padding: 4px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .xtech-lightbox__image {
+        transition: none !important;
+    }
+}
