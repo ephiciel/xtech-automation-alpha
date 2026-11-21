@@ -39,7 +39,7 @@
         function productPhoto(product) {
             const src = typeof product?.imageUrl === "string" ? product.imageUrl : "";
             if (!/^https:\/\//i.test(src)) return "—";
-            return `<img data-product-image alt="Product" loading="lazy" width="60" height="60" style="object-fit:cover;border-radius:6px" src="${esc(src)}">`;
+            return `<img data-product-image alt="Product" loading="lazy" referrerpolicy="no-referrer" width="60" height="60" style="object-fit:cover;border-radius:6px" src="${esc(src)}">`;
         }
 
         // Handles inventory products and stock actions

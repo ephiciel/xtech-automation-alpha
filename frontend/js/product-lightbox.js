@@ -6,17 +6,31 @@
     const MAX_ZOOM = 5;
     const MIN_ZOOM = 1;
     const ZOOM_STEP = 0.5;
-    const PRODUCT_AREAS = "#productTable, #pickupProductPreview, [data-product-gallery]";
+    const PRODUCT_AREAS = "[data-product-gallery]";
 
     function clamp(value, low, high) {
         return Math.min(high, Math.max(low, value));
     }
 
     function normalizeImageUrl(src, baseUrl) {
-        if (!String(src || "").trim()) return null;
+        if (typeof src !== "string" || !src.trim() || src.length > 2048) return null;
+        // Check the original string before URL parsing to prevent silent control-char trimming.
+        for (let i = 0; i < src.length; i++) {
+            const code = src.charCodeAt(i);
+            if (code <= 31 || code === 127) return null;
+        }
         try {
-            const url = new URL(String(src || ""), baseUrl);
-            return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+            const url = new URL(src.trim(), baseUrl);
+            if (!url.hostname || url.username || url.password) return null;
+            if (url.protocol === "https:") return url.href;
+            // Exception only for the existing local test preview (HTTP loopback assets).
+            const base = new URL(baseUrl);
+            const isLoopbackPreview =
+                base.protocol === "http:" &&
+                ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname.toLowerCase());
+            return isLoopbackPreview && url.protocol === "http:" && url.origin === base.origin
+                ? url.href
+                : null;
         } catch {
             return null;
         }
@@ -30,13 +44,7 @@
             node.hasAttribute?.("data-xtech-product-image")
         )
             return true;
-        if (
-            String(node.getAttribute?.("alt") || "")
-                .trim()
-                .toLowerCase() === "product"
-        )
-            return true;
-        if (String(node.getAttribute?.("src") || "").includes("/product-images/")) return true;
+        // Alt text and URL paths alone are not authoritative product markers.
         return Boolean(node.closest?.(PRODUCT_AREAS));
     }
 
@@ -124,7 +132,7 @@
               <button type="button" class="xtech-lightbox__close" data-lightbox-action="close" aria-label="Close image viewer" title="Close (Esc)">×</button>
             </div>
             <div class="xtech-lightbox__stage" aria-label="Enlarged image. Double-click or double-tap to zoom.">
-              <img class="xtech-lightbox__image" alt="Expanded product image" draggable="false" />
+              <img class="xtech-lightbox__image" alt="Expanded product image" draggable="false" referrerpolicy="no-referrer" />
               <p class="xtech-lightbox__message" role="status" hidden>Image could not be loaded.</p>
             </div>
             <div class="xtech-lightbox__tools" role="toolbar" aria-label="Image zoom">
@@ -243,6 +251,7 @@
         for (const image of images) {
             if (!isProductImage(image) || image.dataset.xtechLightboxReady === "1") continue;
             image.dataset.xtechLightboxReady = "1";
+            image.referrerPolicy = "no-referrer";
             if (!image.hasAttribute("tabindex")) image.setAttribute("tabindex", "0");
             if (!image.hasAttribute("role")) image.setAttribute("role", "button");
             image.setAttribute("aria-label", "Enlarge product image");

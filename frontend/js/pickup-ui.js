@@ -40,7 +40,7 @@
         function pickupPhoto(product, size = 40) {
             const src = typeof product?.imageUrl === "string" ? product.imageUrl : "";
             if (!/^https:\/\//i.test(src)) return "";
-            return `<img data-product-image alt="Product" src="${esc(src)}" width="${size}" height="${size}" loading="lazy" style="object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px">`;
+            return `<img data-product-image alt="Product" referrerpolicy="no-referrer" src="${esc(src)}" width="${size}" height="${size}" loading="lazy" style="object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px">`;
         }
 
         // Displays the products added to a pickup request
