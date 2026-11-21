@@ -8,6 +8,22 @@ const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
 
 // Finds an element by its ID
 const $ = (id) => document.getElementById(id);
+let signInScreenRequested = false;
+
+function showSignInScreen() {
+    signInScreenRequested = true;
+    $("landingScreen").classList.add("hidden");
+    $("loginScreen").classList.remove("hidden");
+    if (!$("loginForm").classList.contains("hidden")) $("loginEmail").focus();
+}
+
+$("landingNavSignIn").addEventListener("click", showSignInScreen);
+$("landingHeroSignIn").addEventListener("click", showSignInScreen);
+$("backToLandingBtn").addEventListener("click", () => {
+    signInScreenRequested = false;
+    $("loginScreen").classList.add("hidden");
+    $("landingScreen").classList.remove("hidden");
+});
 
 // Frontend service modules must load before the UI application starts.
 if (
@@ -310,8 +326,10 @@ async function finishSignedInUser(user) {
     const me = await api("/api/auth/me");
     currentUser = user;
     profile = me.profile;
+    signInScreenRequested = false;
     $("userEmail").textContent = user.email || "";
     $("roleLabel").textContent = `${roleDisplayName(profile.role)} account`;
+    $("landingScreen").classList.add("hidden");
     $("loginScreen").classList.add("hidden");
     $("app").classList.remove("hidden");
     applyRole();
@@ -330,7 +348,8 @@ function showSignedOutState() {
     notificationUi.resetNotifications();
     resetPasswordChangeMfa();
     resetChatPanel();
-    $("loginScreen").classList.remove("hidden");
+    $("loginScreen").classList.toggle("hidden", !signInScreenRequested);
+    $("landingScreen").classList.toggle("hidden", signInScreenRequested);
     $("app").classList.add("hidden");
 }
 
@@ -342,7 +361,7 @@ if (!window.XTechAppLifecycle)
 const appLifecycle = window.XTechAppLifecycle.createAppLifecycle({
     prepareAuthScreen: () => {
         showAuthMode("login", { preserveOtpSession: true });
-        restoreEmailOtpSession();
+        if (restoreEmailOtpSession()) showSignInScreen();
     },
     initFirebase,
     registerAuthObserver: (auth, notify) =>
