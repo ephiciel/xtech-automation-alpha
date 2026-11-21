@@ -9,6 +9,8 @@
         <link rel="icon" type="image/png" href="/xtech-favicon-XTA.png" />
         <!-- Loads the XTECH design styles -->
         <link rel="stylesheet" href="css/style.css" />
+        <link rel="stylesheet" href="css/landing.css" />
+        <link rel="stylesheet" href="css/customer-products.css" />
         <link rel="stylesheet" href="css/product-lightbox.css" />
         <!-- Connection hints for Firebase and dashboard libraries; scripts remain unchanged. -->
         <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -21,9 +23,197 @@
         <link rel="stylesheet" href="css/sidebar-toggle.css" />
     </head>
     <body>
+        <main id="landingScreen" class="landing-screen">
+            <header class="landing-nav">
+                <a class="landing-brand" href="#top" aria-label="XTECH Automation home">
+                    <span class="landing-brand-mark" aria-hidden="true">X</span>
+                    <span>XTECH <strong>Automation</strong></span>
+                </a>
+                <nav aria-label="Main navigation">
+                    <a href="#landingCapabilities">Capabilities</a>
+                    <button
+                        class="theme-toggle landing-theme-toggle"
+                        type="button"
+                        aria-label="Switch to dark mode"
+                    >
+                        <span class="theme-icon" aria-hidden="true">☾</span>
+                        <span class="theme-label">Dark mode</span>
+                    </button>
+                    <button id="landingNavSignIn" class="landing-signin" type="button">
+                        Sign in <span aria-hidden="true">→</span>
+                    </button>
+                </nav>
+            </header>
+
+            <section id="top" class="landing-hero">
+                <div class="landing-copy">
+                    <p class="landing-eyebrow">
+                        <span></span> Buxton industrial solutions &amp; lubricants
+                    </p>
+                    <h1>Keep industry <span>running smoothly.</span></h1>
+                    <p class="landing-intro">
+                        Explore industrial maintenance cleaners, specialty lubricants, greases, and
+                        institutional care products from Buxton Industrial Solutions and Lubricants.
+                    </p>
+                    <div class="landing-actions">
+                        <button id="landingHeroSignIn" class="landing-cta" type="button">
+                            Sign in to XTECH <span aria-hidden="true">→</span>
+                        </button>
+                        <a class="landing-secondary" href="#landingCapabilities">
+                            Explore capabilities <span aria-hidden="true">↓</span>
+                        </a>
+                    </div>
+                    <p class="landing-access-note">
+                        <span aria-hidden="true">⌑</span> Industrial products for maintenance,
+                        equipment, and facilities
+                    </p>
+                </div>
+
+                <div
+                    class="landing-visual"
+                    aria-label="A preview of Buxton industrial cleaners, lubricants, and greases"
+                >
+                    <div class="landing-orbit landing-orbit-one"></div>
+                    <div class="landing-orbit landing-orbit-two"></div>
+                    <div class="landing-dashboard-card">
+                        <div class="landing-dashboard-head">
+                            <div>
+                                <span class="landing-card-kicker">BUXTON PRODUCT RANGE</span>
+                                <h2>Solutions for the work at hand</h2>
+                            </div>
+                            <span class="landing-live-dot" aria-hidden="true"></span>
+                        </div>
+                        <div class="landing-summary-grid">
+                            <div class="landing-summary-card">
+                                <span class="landing-summary-icon inventory-icon" aria-hidden="true"
+                                    >▦</span
+                                >
+                                <span>Maintenance</span>
+                                <strong>Clean &amp; protect</strong>
+                                <small>Degreasers, cleaners, and more</small>
+                            </div>
+                            <div class="landing-summary-card">
+                                <span class="landing-summary-icon pickup-icon" aria-hidden="true"
+                                    >↗</span
+                                >
+                                <span>Lubricants</span>
+                                <strong>Made for machinery</strong>
+                                <small>Oils for industrial applications</small>
+                            </div>
+                            <div class="landing-summary-card landing-summary-wide">
+                                <div class="landing-chart-label">
+                                    <span class="landing-summary-icon sales-icon" aria-hidden="true"
+                                        >⌁</span
+                                    >
+                                    <span
+                                        ><strong>Specialty greases</strong
+                                        ><small>Options for demanding conditions</small></span
+                                    >
+                                </div>
+                                <svg
+                                    class="landing-chart"
+                                    viewBox="0 0 360 92"
+                                    role="img"
+                                    aria-label="Decorative product range illustration"
+                                >
+                                    <defs>
+                                        <linearGradient
+                                            id="landingChartFill"
+                                            x1="0"
+                                            x2="0"
+                                            y1="0"
+                                            y2="1"
+                                        >
+                                            <stop
+                                                offset="0%"
+                                                stop-color="#6c8cff"
+                                                stop-opacity=".3"
+                                            />
+                                            <stop
+                                                offset="100%"
+                                                stop-color="#6c8cff"
+                                                stop-opacity="0"
+                                            />
+                                        </linearGradient>
+                                    </defs>
+                                    <path
+                                        d="M0 72 C28 66 40 77 63 58 S101 62 126 43 159 50 182 38 215 49 240 28 273 35 296 20 329 26 360 8 V92 H0Z"
+                                        fill="url(#landingChartFill)"
+                                    />
+                                    <path
+                                        d="M0 72 C28 66 40 77 63 58 S101 62 126 43 159 50 182 38 215 49 240 28 273 35 296 20 329 26 360 8"
+                                        fill="none"
+                                        stroke="#829bff"
+                                        stroke-width="3"
+                                        stroke-linecap="round"
+                                    />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="landing-dashboard-foot">
+                            <span></span> Industrial maintenance and facility care
+                        </div>
+                    </div>
+                    <div class="landing-float-tag">
+                        <span aria-hidden="true">✦</span> Buxton industrial solutions
+                    </div>
+                </div>
+            </section>
+
+            <section
+                id="landingCapabilities"
+                class="landing-capabilities"
+                aria-labelledby="landingCapabilitiesTitle"
+            >
+                <div class="landing-section-heading">
+                    <p class="landing-eyebrow">INDUSTRIAL SOLUTIONS &amp; LUBRICANTS</p>
+                    <h2 id="landingCapabilitiesTitle">
+                        Products for maintenance, machinery, and more.
+                    </h2>
+                    <p>
+                        Find specialty products for industrial upkeep, equipment lubrication, and
+                        institutional cleaning.
+                    </p>
+                </div>
+                <div class="landing-feature-grid">
+                    <article class="landing-feature-card">
+                        <span class="landing-feature-number">01</span>
+                        <h3>Industrial maintenance specialties</h3>
+                        <p>
+                            Degreasers, descalers, rust removers, contact cleaners, and other
+                            products for industrial upkeep.
+                        </p>
+                    </article>
+                    <article class="landing-feature-card">
+                        <span class="landing-feature-number">02</span>
+                        <h3>Specialty oils and lubricants</h3>
+                        <p>
+                            Cutting, hydraulic, compressor, turbine, refrigeration, and other
+                            specialty oils for equipment needs.
+                        </p>
+                    </article>
+                    <article class="landing-feature-card">
+                        <span class="landing-feature-number">03</span>
+                        <h3>Greases and facility care</h3>
+                        <p>
+                            High-temperature and lithium greases, plus institutional cleaners,
+                            disinfectants, and odor control.
+                        </p>
+                    </article>
+                </div>
+            </section>
+            <footer class="landing-footer">
+                <span>© XTECH Automation</span>
+                <span>Buxton Industrial Solutions and Lubricants</span>
+            </footer>
+        </main>
+
         <!-- Shows the sign in & customer registration screen -->
-        <div id="loginScreen" class="login-screen">
+        <div id="loginScreen" class="login-screen hidden">
             <div class="login-card">
+                <button id="backToLandingBtn" class="auth-return" type="button">
+                    <span aria-hidden="true">←</span> Back to home
+                </button>
                 <div class="login-header">
                     <div class="brand">XTECH <span>Automation</span></div>
                     <button
@@ -382,6 +572,9 @@
                     <button class="nav" data-section="inventory">Inventory Management</button>
                     <button class="nav" data-section="transactions">Stock Movement History</button>
                     <button class="nav" data-section="customers">Customer Management</button>
+                    <button class="nav customer-only" data-section="customerProducts">
+                        View Products
+                    </button>
                     <button class="nav" data-section="pickups">Pickup Services</button>
                     <button class="nav" data-section="notifications">Notifications</button>
                     <button class="nav" data-section="sales">Sales Transactions</button>
@@ -393,6 +586,34 @@
 
                 <!-- Contains all pages shown inside the application -->
                 <main class="content">
+                    <!-- Customers can browse product photos without editing inventory. -->
+                    <section id="customerProducts" class="section customer-only-section">
+                        <div class="page-head">
+                            <div>
+                                <h1>View Products</h1>
+                                <p>See product photos and details before requesting a pickup.</p>
+                            </div>
+                        </div>
+                        <div class="customer-catalog-tools">
+                            <input
+                                id="customerProductsSearch"
+                                type="search"
+                                placeholder="Search products or categories"
+                                maxlength="120"
+                                aria-label="Search products"
+                            />
+                            <span
+                                id="customerProductsCount"
+                                class="customer-catalog-count"
+                                aria-live="polite"
+                            ></span>
+                        </div>
+                        <div
+                            id="customerProductsGrid"
+                            class="customer-catalog-grid"
+                            aria-live="polite"
+                        ></div>
+                    </section>
                     <!-- Shows system totals, charts, and recent activity -->
                     <section id="dashboard" class="section active">
                         <div class="page-head">
@@ -1468,6 +1689,7 @@
         <script src="js/auth-session-state.js"></script>
         <script src="js/app-lifecycle.js"></script>
         <script src="js/ui-feedback.js"></script>
+        <script src="js/customer-products-ui.js"></script>
         <script src="js/app.js"></script>
         <script src="js/sidebar-toggle.js" defer></script>
     </body>

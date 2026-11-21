@@ -8,6 +8,22 @@ const EMAIL_OTP_SESSION_KEY = "xtech-email-otp-session";
 
 // Finds an element by its ID
 const $ = (id) => document.getElementById(id);
+let signInScreenRequested = false;
+
+function showSignInScreen() {
+    signInScreenRequested = true;
+    $("landingScreen").classList.add("hidden");
+    $("loginScreen").classList.remove("hidden");
+    if (!$("loginForm").classList.contains("hidden")) $("loginEmail").focus();
+}
+
+$("landingNavSignIn").addEventListener("click", showSignInScreen);
+$("landingHeroSignIn").addEventListener("click", showSignInScreen);
+$("backToLandingBtn").addEventListener("click", () => {
+    signInScreenRequested = false;
+    $("loginScreen").classList.add("hidden");
+    $("landingScreen").classList.remove("hidden");
+});
 
 // Frontend service modules must load before the UI application starts.
 if (
@@ -242,6 +258,33 @@ function syncPickupQuantityLimit() {
     return pickupUi.syncPickupQuantityLimit();
 }
 
+// Browsing products reuses authenticated inventory data and never changes stock.
+if (!window.XTechCustomerProductsUi) {
+    throw new Error("XTECH customer catalogue module is missing. Check script order.");
+}
+const customerProductsUi = window.XTechCustomerProductsUi.createCustomerProductsUi({
+    $,
+    api,
+    toast,
+    getProfile: () => profile,
+    onRequestPickup: async (productID) => {
+        if (profile?.role !== "customer") return;
+        await showSection("pickups");
+        await pickupUi.refreshPickupInventory();
+        const picker = $("pickupProduct");
+        if (!Array.from(picker.options).some((option) => option.value === productID)) {
+            toast("This product is no longer available for pickup.");
+            return;
+        }
+        picker.value = productID;
+        picker.dispatchEvent(new window.Event("change", { bubbles: true }));
+        $("pickupQuantity")?.focus();
+    }
+});
+async function loadCustomerProducts() {
+    return customerProductsUi.loadCustomerProducts();
+}
+
 // Stage 4.41: shared page shell owns navigation, role visibility, theme, and modal controls.
 if (!window.XTechAppShellUi)
     throw new Error("XTECH application shell is missing. Check script order.");
@@ -264,6 +307,7 @@ const appShellUi = window.XTechAppShellUi.createAppShellUi({
     loadTransactions,
     loadCustomers,
     loadPickups,
+    loadCustomerProducts,
     loadNotifications,
     loadSales,
     loadUsers,
@@ -310,8 +354,10 @@ async function finishSignedInUser(user) {
     const me = await api("/api/auth/me");
     currentUser = user;
     profile = me.profile;
+    signInScreenRequested = false;
     $("userEmail").textContent = user.email || "";
     $("roleLabel").textContent = `${roleDisplayName(profile.role)} account`;
+    $("landingScreen").classList.add("hidden");
     $("loginScreen").classList.add("hidden");
     $("app").classList.remove("hidden");
     applyRole();
@@ -330,7 +376,8 @@ function showSignedOutState() {
     notificationUi.resetNotifications();
     resetPasswordChangeMfa();
     resetChatPanel();
-    $("loginScreen").classList.remove("hidden");
+    $("loginScreen").classList.toggle("hidden", !signInScreenRequested);
+    $("landingScreen").classList.toggle("hidden", signInScreenRequested);
     $("app").classList.add("hidden");
 }
 
@@ -342,7 +389,7 @@ if (!window.XTechAppLifecycle)
 const appLifecycle = window.XTechAppLifecycle.createAppLifecycle({
     prepareAuthScreen: () => {
         showAuthMode("login", { preserveOtpSession: true });
-        restoreEmailOtpSession();
+        if (restoreEmailOtpSession()) showSignInScreen();
     },
     initFirebase,
     registerAuthObserver: (auth, notify) =>

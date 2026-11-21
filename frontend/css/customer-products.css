@@ -1,0 +1,112 @@
+/* Customer-facing image catalogue; scoped to avoid changing XTECH's existing pages. */
+.customer-catalog-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.customer-catalog-tools input {
+    flex: 1 1 240px;
+    max-width: 520px;
+}
+.customer-catalog-count {
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+.customer-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+    gap: 18px;
+}
+.customer-catalog-card {
+    overflow: hidden;
+    border: 1px solid var(--line, rgba(127, 127, 127, 0.2));
+    background: var(--panel);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+}
+.customer-catalog-media {
+    aspect-ratio: 4/3;
+    background: var(--panel-strong);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+.customer-catalog-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.customer-catalog-no-image {
+    text-align: center;
+    padding: 18px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+.customer-catalog-body {
+    padding: 16px;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+.customer-catalog-title {
+    font-size: 1.05rem;
+    line-height: 1.35;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+.customer-catalog-category {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0;
+}
+.customer-catalog-stock {
+    font-size: 0.78rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 5px 10px;
+}
+.customer-catalog-stock.available {
+    background: var(--success-soft, #dcfce7);
+    color: var(--success, #166534);
+}
+.customer-catalog-stock.unavailable {
+    background: var(--danger-soft, #fee2e2);
+    color: var(--danger, #991b1b);
+}
+.customer-catalog-details {
+    width: 100%;
+    font-size: 0.9rem;
+}
+.customer-catalog-details summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+.customer-catalog-details p {
+    margin: 8px 0 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.customer-catalog-request {
+    margin-top: auto;
+    width: 100%;
+}
+.customer-catalog-empty {
+    grid-column: 1/-1;
+    color: var(--muted);
+    padding: 25px 10px;
+}
+@media (max-width: 560px) {
+    .customer-catalog-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 165px), 1fr));
+        gap: 10px;
+    }
+    .customer-catalog-body {
+        padding: 12px;
+    }
+}
