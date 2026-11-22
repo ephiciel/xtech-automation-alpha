@@ -22,6 +22,7 @@
             fmtDate,
             getCustomers,
             setCustomers,
+            getProfile,
             confirm,
             document,
             window
@@ -60,6 +61,7 @@
             menu.innerHTML = `
                 <button type="button" data-action="edit" role="menuitem">Edit customer</button>
                 <button type="button" data-action="history" role="menuitem">View history</button>
+                ${getProfile?.()?.role === "admin" && typeof window.manageCustomerPrices === "function" ? '<button type="button" data-action="prices" role="menuitem">Manage Prices</button>' : ""}
                 <button type="button" class="${active ? "customer-menu-danger" : "customer-menu-activate"}" data-action="status" role="menuitem">
                     ${active ? "Deactivate" : "Activate"}
                 </button>
@@ -96,6 +98,13 @@
                 if (action === "edit") window.editCustomer(customerID);
                 if (action === "history") window.customerHistory(customerID);
                 if (action === "status") window.setCustomerStatus(customerID, !active);
+                if (
+                    action === "prices" &&
+                    getProfile?.()?.role === "admin" &&
+                    typeof window.manageCustomerPrices === "function"
+                ) {
+                    window.manageCustomerPrices(customerID);
+                }
             });
         }
 

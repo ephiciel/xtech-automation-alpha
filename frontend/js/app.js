@@ -518,9 +518,19 @@ const customerUi = window.XTechCustomerUi.createCustomerUi({
     fmtDate,
     getCustomers: appState.getCustomers,
     setCustomers: appState.setCustomers,
+    getProfile: () => profile,
     confirm,
     document,
     window
+});
+window.XTechCustomerPricesUi?.createCustomerPricesUi({
+    $,
+    api,
+    toast,
+    esc,
+    getCustomers: appState.getCustomers,
+    getProfile: () => profile,
+    confirm
 });
 const pickupUi = window.XTechPickupUi.createPickupUi({
     $,
@@ -578,6 +588,7 @@ const salesUi = window.XTechSalesUi.createSalesUi({
     customerNameFor,
     itemSummary,
     productById,
+    getProfile: () => profile,
     validatePositiveWholeNumber,
     mergeFormItem,
     validateText,

@@ -528,3 +528,120 @@ test("inventory transactions history sorts newest first and limits 1000", async 
     ]);
     assert.deepEqual(res.body.transactions, [{ id: "tr1", type: "STOCK_IN", quantity: 2 }]);
 });
+
+test("Warehouse cannot submit product prices", async () => {
+    const { handler } = setup();
+    const request = req(validProduct({ basePrice: "100" }));
+    request.profile = { role: "warehouse" };
+    const res = response();
+
+    await handler("POST", "/api/products")(request, res);
+    assert.equal(res.statusCode, 403);
+    assert.match(res.body.message, /Only Admin/);
+});
+
+test("Admin cannot enter malformed product prices", async () => {
+    const { handler } = setup();
+    const request = req(validProduct({ basePrice: "19.999" }));
+    request.profile = { role: "admin" };
+    const res = response();
+
+    await handler("POST", "/api/products")(request, res);
+    assert.equal(res.statusCode, 400);
+});
+
+test("Admin creates a priced product with an audit record", async () => {
+    const writes = [];
+    const db = {
+        collection: () => ({
+            doc: (id) => ({
+                id,
+                get: async () => ({ exists: false })
+            })
+        }),
+        batch: () => ({
+            set: (ref, data) => writes.push(data),
+            commit: async () => {}
+        })
+    };
+
+    const { handler } = setup({ getDb: () => db });
+    const request = req(
+        validProduct({
+            quantity: 0,
+            basePrice: "125.50"
+        })
+    );
+    request.profile = { role: "admin" };
+    const res = response();
+
+    await handler("POST", "/api/products")(request, res);
+
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.body.product.basePriceCents, 12550);
+    assert.equal(writes[0].basePriceCents, 12550);
+    assert.equal(writes[1].type, "BASE_PRICE_SET");
+    assert.equal(writes[1].performedByUID, "test-admin");
+});
+
+test("Warehouse cannot edit an existing price", async () => {
+    let wrote = false;
+    const db = collectionDb("products", {
+        doc: () => ({
+            get: async () => ({
+                exists: true,
+                data: () => validProduct()
+            }),
+            update: async () => {
+                wrote = true;
+            }
+        })
+    });
+
+    const { handler } = setup({ getDb: () => db });
+    const request = req(validProduct({ basePrice: "500" }), { productID: "P100" });
+    request.profile = { role: "warehouse" };
+    const res = response();
+
+    await handler("PUT", "/api/products/:productID")(request, res);
+
+    assert.equal(res.statusCode, 403);
+    assert.equal(wrote, false);
+});
+
+test("Admin price edits record old and new values", async () => {
+    const writes = [];
+    const productRef = {
+        id: "P100",
+        get: async () => ({
+            exists: true,
+            data: () =>
+                validProduct({
+                    basePriceCents: 2000
+                })
+        })
+    };
+
+    const db = {
+        collection: (name) => ({
+            doc: (id) => (name === "products" ? productRef : { id })
+        }),
+        batch: () => ({
+            update: (ref, data) => writes.push(data),
+            set: (ref, data) => writes.push(data),
+            commit: async () => {}
+        })
+    };
+
+    const { handler } = setup({ getDb: () => db });
+    const request = req(validProduct({ basePrice: "25.50" }), { productID: "P100" });
+    request.profile = { role: "admin" };
+    const res = response();
+
+    await handler("PUT", "/api/products/:productID")(request, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(writes[0].basePriceCents, 2550);
+    assert.equal(writes[1].previousPriceCents, 2000);
+    assert.equal(writes[1].newPriceCents, 2550);
+});

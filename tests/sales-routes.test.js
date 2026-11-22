@@ -29,7 +29,15 @@ const body = (overrides = {}) => ({
 });
 
 function fixture(seed = {}, options = {}) {
-    const names = ["sales", "products", "customers", "inventoryTransactions", "notifications"];
+    const names = [
+        "sales",
+        "products",
+        "customers",
+        "inventoryTransactions",
+        "notifications",
+        "pricingAudit",
+        "customerPrices"
+    ];
     const state = Object.fromEntries(
         names.map((name) => [name, new Map(Object.entries(seed[name] || {}))])
     );
@@ -44,6 +52,24 @@ function fixture(seed = {}, options = {}) {
         const ref = (id) => ({
             name,
             id,
+            collection(subcollection) {
+                assert.equal(name, "customers");
+                assert.equal(subcollection, "prices");
+
+                return {
+                    doc(productID) {
+                        return {
+                            async get() {
+                                const value = state.customerPrices.get(`${id}:${productID}`);
+                                return {
+                                    exists: value !== undefined,
+                                    data: () => ({ ...value })
+                                };
+                            }
+                        };
+                    }
+                };
+            },
             async get() {
                 return { id, exists: bucket.has(id), data: () => ({ ...bucket.get(id) }) };
             },
@@ -381,4 +407,133 @@ test("Firestore transaction failure produces HTTP 400 with no writes", async () 
     assert.equal(res.code, 400);
     assert.equal(f.writes.length, 0);
     assert.equal(f.state.sales.size, 0);
+});
+
+test("default product price is captured on a confirmed sale", async () => {
+    const f = fixture({
+        products: { "CHEM-01": product(10, { basePriceCents: 25000 }) }
+    });
+
+    const res = await f.request("post", "/api/sales", { body: body() });
+
+    assert.equal(res.code, 201);
+    assert.equal(res.body.sale.totalCents, 75000);
+    assert.equal(res.body.sale.items[0].unitPriceCents, 25000);
+    assert.equal(res.body.sale.items[0].priceSource, "product");
+    assert.equal(f.state.products.get("CHEM-01").quantity, 7);
+});
+
+test("negotiated customer price takes precedence", async () => {
+    const f = fixture({
+        products: { "CHEM-01": product(10, { basePriceCents: 25000 }) },
+        customers: { c1: { name: "Customer One", active: true } },
+        customerPrices: {
+            "c1:CHEM-01": { active: true, priceCents: 22000 }
+        }
+    });
+
+    const res = await f.request("post", "/api/sales", {
+        body: body({ customerID: "c1" })
+    });
+
+    assert.equal(res.code, 201);
+    assert.equal(res.body.sale.totalCents, 66000);
+    assert.equal(res.body.sale.items[0].priceSource, "customer");
+});
+
+test("Admin sale override takes priority and writes audit", async () => {
+    const f = fixture({
+        products: { "CHEM-01": product(10, { basePriceCents: 25000 }) },
+        customers: { c1: { name: "Customer One", active: true } },
+        customerPrices: {
+            "c1:CHEM-01": { active: true, priceCents: 22000 }
+        }
+    });
+
+    const res = await f.request("post", "/api/sales", {
+        role: "admin",
+        body: body({
+            customerID: "c1",
+            items: [
+                {
+                    productID: "CHEM-01",
+                    quantity: 3,
+                    overridePrice: "200.00"
+                }
+            ]
+        })
+    });
+
+    assert.equal(res.code, 201);
+    assert.equal(res.body.sale.totalCents, 60000);
+    assert.equal(res.body.sale.items[0].priceSource, "sale_override");
+
+    const audit = [...f.state.pricingAudit.values()][0];
+    assert.equal(audit.type, "SALE_PRICE_OVERRIDE");
+    assert.equal(audit.previousPriceCents, 22000);
+    assert.equal(audit.newPriceCents, 20000);
+});
+
+test("Secretary cannot override a price", async () => {
+    const f = fixture(seedProduct());
+    const res = await f.request("post", "/api/sales", {
+        role: "secretary",
+        body: body({
+            items: [
+                {
+                    productID: "CHEM-01",
+                    quantity: 2,
+                    overridePrice: "1.00"
+                }
+            ]
+        })
+    });
+
+    assert.equal(res.code, 403);
+    assert.equal(f.writes.length, 0);
+});
+
+test("invalid and conflicting overrides cannot write a sale", async () => {
+    for (const items of [
+        [{ productID: "CHEM-01", quantity: 1, overridePrice: "-1" }],
+        [{ productID: "CHEM-01", quantity: 1, overridePrice: "2.999" }],
+        [
+            { productID: "CHEM-01", quantity: 1, overridePrice: "5" },
+            { productID: "CHEM-01", quantity: 1, overridePrice: "6" }
+        ]
+    ]) {
+        const f = fixture(seedProduct());
+        const res = await f.request("post", "/api/sales", {
+            body: body({ items })
+        });
+
+        assert.equal(res.code, 400);
+        assert.equal(f.writes.length, 0);
+    }
+});
+
+test("unpriced legacy products retain stock workflow without fake zero total", async () => {
+    const f = fixture(seedProduct());
+    const res = await f.request("post", "/api/sales", { body: body() });
+
+    assert.equal(res.code, 201);
+    assert.equal(res.body.sale.totalCents, null);
+    assert.equal(res.body.sale.items[0].unitPriceCents, null);
+    assert.equal(res.body.sale.items[0].priceSource, "unpriced");
+    assert.equal(f.state.products.get("CHEM-01").quantity, 7);
+});
+
+test("recorded price remains unchanged when product price changes", async () => {
+    const f = fixture({
+        products: { "CHEM-01": product(10, { basePriceCents: 25000 }) }
+    });
+
+    const result = await f.request("post", "/api/sales", { body: body() });
+    assert.equal(result.code, 201);
+
+    f.state.products.get("CHEM-01").basePriceCents = 30000;
+
+    const history = await f.request("get", "/api/sales");
+    assert.equal(history.body.sales[0].totalCents, 75000);
+    assert.equal(history.body.sales[0].items[0].unitPriceCents, 25000);
 });

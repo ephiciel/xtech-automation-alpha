@@ -1660,6 +1660,11 @@ tbody tr:last-child td {
     display: none;
 }
 
+/* Customer navigation is visible only when applyRole permits the customer role. */
+.nav.customer-only {
+    display: flex;
+}
+
 /* Styles the floating XTECH AI help chat */
 
 /* Shows page-specific questions above the AI conversation. */

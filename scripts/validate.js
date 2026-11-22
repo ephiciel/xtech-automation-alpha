@@ -159,7 +159,6 @@ const quantityOnlyFiles = [
     "frontend/js/app.js",
     "frontend/js/customer-ui.js",
     "frontend/js/pickup-ui.js",
-    "frontend/js/sales-ui.js",
     "frontend/js/reports-ui.js",
     "frontend/js/staff-ui.js",
     "frontend/js/security-ui.js",
@@ -176,12 +175,43 @@ const quantityOnlyFiles = [
 ];
 const disallowedFinancialUi =
     /(?:₱|\bprice\b|\bpricing\b|\brevenue\b|total amount|estimated total|unit price)/i;
-const financialUiHits = quantityOnlyFiles.filter((file) =>
-    disallowedFinancialUi.test(fs.readFileSync(path.join(root, file), "utf8"))
-);
-if (financialUiHits.length)
-    fail(`quantity-only workflow contains monetary UI text: ${financialUiHits.join(", ")}`);
-else pass("quantity-only workflow has no monetary UI text");
+const approvedProductPriceUi = ["<th>Default Price</th>", "Default selling price (PHP)"];
+
+const financialUiHits = quantityOnlyFiles.filter((file) => {
+    let source = fs.readFileSync(path.join(root, file), "utf8");
+
+    if (file === "frontend/index.html") {
+        for (const snippet of approvedProductPriceUi) {
+            if (source.split(snippet).length !== 2) return true;
+            source = source.replace(snippet, "");
+        }
+
+        if (!source.includes('id="productBasePrice"')) {
+            return true;
+        }
+
+        // Only the designated Sales section may show sale pricing fields.
+        const start = source.indexOf("<!-- Lets staff record sales and deduct sold stock -->");
+        const end = source.indexOf("<!-- Lets the admin create and manage staff accounts -->");
+        if (start < 0 || end <= start) return true;
+        const saleSection = source.slice(start, end);
+        for (const required of [
+            'id="saleForm"',
+            'id="saleOverridePrice"',
+            'id="salePricePreview"',
+            "<th>Sale Total</th>"
+        ]) {
+            if (saleSection.split(required).length !== 2) return true;
+        }
+        if (/credit card|card number|checkout|payment gateway/i.test(saleSection)) return true;
+        source = source.slice(0, start) + source.slice(end);
+    }
+
+    return disallowedFinancialUi.test(source);
+});
+
+if (financialUiHits.length) fail(`Unapproved financial UI text: ${financialUiHits.join(", ")}`);
+else pass("Approved product pricing UI and financial text restrictions verified");
 
 const appJs = fs.readFileSync(path.join(root, "frontend/js/app.js"), "utf8");
 // Stages 4.45–4.50: feedback, resilience and accessible load-order contract.

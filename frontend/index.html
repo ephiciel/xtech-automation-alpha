@@ -739,6 +739,7 @@
                                             <th>Product Name</th>
                                             <th>Category</th>
                                             <th>Picture</th>
+                                            <th>Default Price</th>
                                             <th>Stock Status</th>
                                             <th>Actions</th>
                                         </tr>
@@ -776,6 +777,18 @@
                                         <option>Other</option>
                                     </select></label
                                 >
+                                <label class="wide admin-only">
+                                    Default selling price (PHP)
+                                    <input
+                                        id="productBasePrice"
+                                        type="number"
+                                        min="0"
+                                        max="9999999.99"
+                                        step="0.01"
+                                        inputmode="decimal"
+                                        placeholder="Optional"
+                                    />
+                                </label>
                                 <label class="wide"
                                     >Product picture URL (HTTPS)<input
                                         id="productImageUrl"
@@ -1069,7 +1082,8 @@
                             <p class="helper-text">
                                 A registered customer is optional. Use “Walk-in / No registered
                                 customer” for over-the-counter sales. XTECH records products and
-                                quantities only; financial handling is managed outside the system.
+                                quantities and selling prices for monitoring. Payments are handled
+                                outside the system.
                             </p>
                             <form id="saleForm" class="form-grid">
                                 <label
@@ -1095,11 +1109,26 @@
                                                 step="1"
                                                 value="1"
                                         /></label>
+                                        <label id="saleOverrideWrap" hidden
+                                            >Admin override price (PHP)
+                                            <input
+                                                id="saleOverridePrice"
+                                                type="number"
+                                                min="0"
+                                                max="9999999.99"
+                                                step="0.01"
+                                                inputmode="decimal"
+                                                placeholder="Optional"
+                                            />
+                                        </label>
                                         <button id="addSaleItem" class="secondary" type="button">
                                             Add Product
                                         </button>
                                     </div>
                                     <div id="saleItemList" class="item-list"></div>
+                                    <p id="salePricePreview" class="helper-text" aria-live="polite">
+                                        Add products to view an estimated total.
+                                    </p>
                                 </div>
                                 <label class="wide"
                                     >Sale Notes (Optional)<textarea
@@ -1141,6 +1170,7 @@
                                             <th>Customer</th>
                                             <th>Sale Status</th>
                                             <th>Products Sold</th>
+                                            <th>Sale Total</th>
                                             <th>Processed By</th>
                                             <th>Actions</th>
                                         </tr>
@@ -1673,6 +1703,7 @@
         <script src="js/auth-client.js"></script>
         <script src="js/inventory-ui.js"></script>
         <script src="js/customer-ui.js"></script>
+        <script src="js/customer-prices-ui.js"></script>
         <script src="js/pickup-ui.js"></script>
         <script src="js/product-lightbox.js"></script>
         <script src="js/sales-ui.js"></script>

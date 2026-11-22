@@ -88,7 +88,8 @@ function harness({
     confirmed = true,
     sales = [sale],
     chartDark = false,
-    csvTransportError = null
+    csvTransportError = null,
+    role = "admin"
 } = {}) {
     const elements = new Map();
     const calls = [];
@@ -231,7 +232,7 @@ function harness({
             charts.push(chart);
             return chart;
         },
-        getProfile: () => ({ name: "Administrator" }),
+        getProfile: () => ({ name: "Administrator", role }),
         getCurrentUser: () => ({ email: "owner@example.invalid" }),
         getToken: () => userToken,
         onPendingChange: (delta) => loading.push(delta),
@@ -537,4 +538,77 @@ test("frontend loads all new modules before main application", () => {
     assert.match(app, /XTechSalesUi\.createSalesUi/);
     assert.match(app, /XTechDashboardUi\.createDashboardUi/);
     assert.match(app, /XTechReportsUi\.createReportsUi/);
+});
+
+test("Admin override price is shown in preview and sent to Sales API", async () => {
+    const h = harness({
+        responses: { "/api/sales": { sale: { saleID: "NEW-SALE" }, sales: [] } }
+    });
+    h.$("saleProduct").value = "CHEM-01";
+    h.$("saleQuantity").value = "2";
+    h.$("saleOverridePrice").value = "123.40";
+    click(h, "addSaleItem");
+    assert.match(h.$("salePricePreview").textContent, /PHP 246.80/);
+    await submit(h, "saleForm");
+    const post = h.calls.find((c) => c.url === "/api/sales" && c.options.method === "POST");
+    assert.equal(JSON.parse(post.options.body).items[0].overridePrice, "123.40");
+});
+
+test("Secretary cannot send an override even with a forged UI input", async () => {
+    const h = harness({ role: "secretary" });
+    h.$("saleProduct").value = "CHEM-01";
+    h.$("saleQuantity").value = "1";
+    h.$("saleOverridePrice").value = "100";
+
+    click(h, "addSaleItem");
+
+    assert.match(h.toasts.at(-1), /Only Admin/);
+
+    await submit(h, "saleForm");
+
+    assert.match(h.messages.at(-1).msg, /Add at least one product/);
+
+    assert.equal(
+        h.calls.filter((call) => call.url === "/api/sales" && call.options.method === "POST")
+            .length,
+        0
+    );
+});
+
+test("Admin previews selected customer's negotiated amount", async () => {
+    const h = harness({
+        responses: {
+            "/api/customers/C-01/prices": {
+                prices: [{ productID: "CHEM-01", priceCents: 22000 }]
+            }
+        }
+    });
+    h.$("saleCustomerID").value = "C-01";
+    await h.$("saleCustomerID").handlers.change();
+    h.$("saleProduct").value = "CHEM-01";
+    h.$("saleQuantity").value = "2";
+    click(h, "addSaleItem");
+    assert.match(h.$("salePricePreview").textContent, /PHP 440.00/);
+});
+
+test("Sale history shows server-recorded total without recomputing historical amounts", async () => {
+    const pricedSale = {
+        ...sale,
+        totalCents: 44000,
+        items: [
+            {
+                productID: "CHEM-01",
+                productName: "Cleaner",
+                quantity: 2,
+                unitPriceCents: 22000,
+                lineTotalCents: 44000
+            }
+        ]
+    };
+    const h = harness({ sales: [pricedSale] });
+    await h.salesUi.loadSales();
+    assert.match(h.$("saleTable").innerHTML, /PHP 440.00/);
+    h.win.viewSale("sale-doc-1");
+    assert.match(h.$("modalBody").innerHTML, /PHP 220.00/);
+    assert.match(h.$("modalBody").innerHTML, /PHP 440.00/);
 });

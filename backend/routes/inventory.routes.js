@@ -1,4 +1,5 @@
 "use strict";
+const { redactProductForRole } = require("../utils/pricing-visibility");
 
 /**
  * Register original XTECH product and inventory endpoints.
@@ -6,6 +7,7 @@
  * getDb is evaluated per request because Firebase initializes asynchronously.
  */
 const { normalizeProductImageUrl } = require("../utils/product-image-url");
+const { parsePriceCents } = require("../utils/pricing");
 function registerInventoryRoutes(app, deps) {
     const {
         authRequired,
@@ -30,12 +32,40 @@ function registerInventoryRoutes(app, deps) {
         runTransaction: (...args) => getDb().runTransaction(...args)
     };
 
+    function readBasePriceInput(req, res) {
+        if (!Object.prototype.hasOwnProperty.call(req.body, "basePrice")) {
+            return { present: false, cents: null };
+        }
+
+        if (req.profile?.role !== "admin") {
+            res.status(403).json({
+                success: false,
+                message: "Only Admin may change product prices."
+            });
+            return null;
+        }
+
+        try {
+            const value = req.body.basePrice;
+            const cents = value === null || value === "" ? null : parsePriceCents(value);
+            return { present: true, cents };
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            });
+            return null;
+        }
+    }
+
     /* PRODUCTS / INVENTORY */
     app.get("/api/products", authRequired, async (req, res) => {
         try {
             const snap = await db.collection("products").where("active", "==", true).get();
             const products = snap.docs
-                .map((doc) => operationalProduct(doc.data()))
+                .map((doc) =>
+                    redactProductForRole(operationalProduct(doc.data()), req.profile?.role)
+                )
                 .sort((a, b) => String(a.productName).localeCompare(String(b.productName)));
             res.json({ success: true, count: products.length, products });
         } catch (error) {
@@ -53,7 +83,9 @@ function registerInventoryRoutes(app, deps) {
                 const snap = await db.collection("products").where("active", "==", false).get();
                 res.json({
                     success: true,
-                    products: snap.docs.map((doc) => operationalProduct(doc.data()))
+                    products: snap.docs.map((doc) =>
+                        redactProductForRole(operationalProduct(doc.data()), req.profile?.role)
+                    )
                 });
             } catch (error) {
                 console.error(error);
@@ -70,7 +102,10 @@ function registerInventoryRoutes(app, deps) {
             const snap = await db.collection("products").doc(req.params.productID).get();
             if (!snap.exists)
                 return res.status(404).json({ success: false, message: "Product not found." });
-            res.json({ success: true, product: operationalProduct(snap.data()) });
+            res.json({
+                success: true,
+                product: redactProductForRole(operationalProduct(snap.data()), req.profile?.role)
+            });
         } catch (error) {
             console.error(error);
             res.status(500).json({ success: false, message: "Failed to retrieve product." });
@@ -85,6 +120,8 @@ function registerInventoryRoutes(app, deps) {
             const unit = String(req.body.unit || "").trim();
             const quantity = num(req.body.quantity);
             const reorderLevel = num(req.body.reorderLevel);
+            const priceInput = readBasePriceInput(req, res);
+            if (!priceInput) return;
 
             if (!isValidProductID(productID)) {
                 return res.status(400).json({
@@ -122,7 +159,7 @@ function registerInventoryRoutes(app, deps) {
                 });
             }
 
-            // Optional public HTTPS product photo; prices and stock rules are unchanged.
+            // Optional public HTTPS product photo; stock rules are unchanged.
             let imageUrl;
             try {
                 imageUrl = normalizeProductImageUrl(req.body.imageUrl);
@@ -147,6 +184,7 @@ function registerInventoryRoutes(app, deps) {
                 reorderLevel,
                 description: String(req.body.description || "").trim(),
                 imageUrl,
+                ...(priceInput.present ? { basePriceCents: priceInput.cents } : {}),
                 active: true,
                 createdAt: timestamp,
                 updatedAt: timestamp,
@@ -154,6 +192,17 @@ function registerInventoryRoutes(app, deps) {
             };
             const batch = db.batch();
             batch.set(ref, product);
+            if (priceInput.present && priceInput.cents !== null) {
+                const priceAuditRef = db.collection("pricingAudit").doc(newDocumentId());
+                batch.set(priceAuditRef, {
+                    productID,
+                    type: "BASE_PRICE_SET",
+                    previousPriceCents: null,
+                    newPriceCents: priceInput.cents,
+                    performedByUID: req.user.uid,
+                    createdAt: timestamp
+                });
+            }
             if (quantity > 0) {
                 const auditRef = db.collection("inventoryTransactions").doc(newDocumentId());
                 batch.set(auditRef, {
@@ -235,6 +284,9 @@ function registerInventoryRoutes(app, deps) {
                     });
                 }
 
+                const priceInput = readBasePriceInput(req, res);
+                if (!priceInput) return;
+
                 // Do not overwrite an existing image when clients omit imageUrl.
                 const imagePatch = {};
                 if (Object.prototype.hasOwnProperty.call(req.body, "imageUrl")) {
@@ -244,15 +296,36 @@ function registerInventoryRoutes(app, deps) {
                         return res.status(400).json({ success: false, message: error.message });
                     }
                 }
-                await ref.update({
+                const timestamp = now();
+                const patch = {
                     productName,
                     category,
                     unit: String(req.body.unit || "").trim(),
                     reorderLevel,
                     description: String(req.body.description || "").trim(),
                     ...imagePatch,
-                    updatedAt: now()
-                });
+                    ...(priceInput.present ? { basePriceCents: priceInput.cents } : {}),
+                    updatedAt: timestamp
+                };
+
+                if (priceInput.present && (current.basePriceCents ?? null) !== priceInput.cents) {
+                    const priceAuditRef = db.collection("pricingAudit").doc(newDocumentId());
+                    const batch = db.batch();
+                    batch.update(ref, patch);
+                    batch.set(priceAuditRef, {
+                        productID: req.params.productID,
+                        type:
+                            priceInput.cents === null ? "BASE_PRICE_CLEARED" : "BASE_PRICE_UPDATED",
+                        previousPriceCents: current.basePriceCents ?? null,
+                        newPriceCents: priceInput.cents,
+                        performedByUID: req.user.uid,
+                        createdAt: timestamp
+                    });
+                    await batch.commit();
+                } else {
+                    await ref.update(patch);
+                }
+
                 res.json({ success: true, message: "Product updated successfully." });
             } catch (error) {
                 console.error(error);

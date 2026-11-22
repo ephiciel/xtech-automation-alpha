@@ -1,4 +1,6 @@
 "use strict";
+const { redactSaleForRole } = require("../utils/pricing-visibility");
+const { parsePriceCents, resolvePriceCents, calculateLineTotalCents } = require("../utils/pricing");
 /** Existing sales routes, preserved verbatim from backend/server.js.
  * Database access is lazy to avoid connecting on Cloudflare route registration.
  */
@@ -27,7 +29,10 @@ function registerSalesRoutes(app, deps) {
         try {
             const snap = await db.collection("sales").get();
             const sales = snap.docs
-                .map((doc) => ({ id: doc.id, ...operationalSale(doc.data()) }))
+                .map((doc) => ({
+                    id: doc.id,
+                    ...redactSaleForRole(operationalSale(doc.data()), req.profile?.role)
+                }))
                 .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
             res.json({ success: true, sales });
         } catch (error) {
@@ -39,6 +44,32 @@ function registerSalesRoutes(app, deps) {
     app.post("/api/sales", authRequired, roles("admin", "secretary"), async (req, res) => {
         try {
             const items = normalizeItems(req.body.items);
+            const overridePrices = new Map();
+
+            for (const raw of Array.isArray(req.body.items) ? req.body.items : []) {
+                if (!raw || !Object.prototype.hasOwnProperty.call(raw, "overridePrice")) {
+                    continue;
+                }
+
+                if (req.profile?.role !== "admin") {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Only Admin can override a sale price."
+                    });
+                }
+
+                const productID = String(raw.productID || "").trim();
+                const cents = parsePriceCents(raw.overridePrice);
+
+                if (overridePrices.has(productID) && overridePrices.get(productID) !== cents) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Conflicting override prices for the same product."
+                    });
+                }
+
+                overridePrices.set(productID, cents);
+            }
             const notes = String(req.body.notes || "").trim();
             if (!items.length)
                 return res
@@ -73,8 +104,23 @@ function registerSalesRoutes(app, deps) {
                 const productSnaps = await Promise.all(
                     productRefs.map((ref) => transaction.get(ref))
                 );
+                // Read all negotiated prices before making Firestore writes.
+                const priceRefs = customerID
+                    ? items.map((item) =>
+                          db
+                              .collection("customers")
+                              .doc(customerID)
+                              .collection("prices")
+                              .doc(item.productID)
+                      )
+                    : [];
+
+                const priceSnaps = await Promise.all(priceRefs.map((ref) => transaction.get(ref)));
+
                 const timestamp = now();
                 const lineItems = [];
+                let totalCents = 0;
+                let allPriced = true;
 
                 items.forEach((item, index) => {
                     const productSnap = productSnaps[index];
@@ -90,11 +136,66 @@ function registerSalesRoutes(app, deps) {
                         );
 
                     const next = previous - item.quantity;
+                    const customerPrice = priceSnaps[index]?.exists
+                        ? priceSnaps[index].data()
+                        : null;
+
+                    const customerPriceCents =
+                        customerPrice && customerPrice.active !== false
+                            ? customerPrice.priceCents
+                            : null;
+
+                    const overridePriceCents = overridePrices.has(item.productID)
+                        ? overridePrices.get(item.productID)
+                        : null;
+
+                    const resolved = resolvePriceCents({
+                        basePriceCents: product.basePriceCents ?? null,
+                        customerPriceCents,
+                        overridePriceCents
+                    });
+
+                    const lineTotalCents = calculateLineTotalCents(
+                        resolved.priceCents,
+                        item.quantity
+                    );
+
+                    if (lineTotalCents === null) {
+                        allPriced = false;
+                    } else {
+                        totalCents += lineTotalCents;
+                        if (!Number.isSafeInteger(totalCents)) {
+                            throw new Error("Sale total exceeds the supported amount.");
+                        }
+                    }
+
                     lineItems.push({
                         productID: product.productID,
                         productName: product.productName,
-                        quantity: item.quantity
+                        quantity: item.quantity,
+                        unitPriceCents: resolved.priceCents,
+                        lineTotalCents,
+                        priceSource: resolved.source
                     });
+
+                    if (overridePriceCents !== null) {
+                        const beforeOverride = resolvePriceCents({
+                            basePriceCents: product.basePriceCents ?? null,
+                            customerPriceCents
+                        });
+
+                        const auditRef = db.collection("pricingAudit").doc(newDocumentId());
+
+                        transaction.set(auditRef, {
+                            type: "SALE_PRICE_OVERRIDE",
+                            saleID: saleRef.id,
+                            productID: product.productID,
+                            previousPriceCents: beforeOverride.priceCents,
+                            newPriceCents: overridePriceCents,
+                            performedByUID: req.user.uid,
+                            createdAt: timestamp
+                        });
+                    }
 
                     transaction.update(productRefs[index], {
                         quantity: next,
@@ -124,6 +225,8 @@ function registerSalesRoutes(app, deps) {
                     customerUID,
                     customerName: customerData?.name || "Walk-in / No registered customer",
                     items: lineItems,
+                    totalCents: allPriced ? totalCents : null,
+                    currency: "PHP",
                     notes,
                     status: "Confirmed",
                     createdAt: timestamp,
@@ -142,7 +245,10 @@ function registerSalesRoutes(app, deps) {
                 });
             });
 
-            res.status(201).json({ success: true, sale: operationalSale(sale) });
+            res.status(201).json({
+                success: true,
+                sale: redactSaleForRole(operationalSale(sale), req.profile?.role)
+            });
         } catch (error) {
             console.error(error);
             res.status(400).json({

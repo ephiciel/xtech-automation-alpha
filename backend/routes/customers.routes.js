@@ -1,4 +1,5 @@
 "use strict";
+const { redactSaleForRole } = require("../utils/pricing-visibility");
 
 /**
  * Customer CRUD, status and history routes.
@@ -257,7 +258,10 @@ function registerCustomerRoutes(app, deps) {
                         pickups.docs.map((doc) => ({ id: doc.id, ...serialize(doc.data()) }))
                     ),
                     sales: sortNewest(
-                        sales.docs.map((doc) => ({ id: doc.id, ...operationalSale(doc.data()) }))
+                        sales.docs.map((doc) => ({
+                            id: doc.id,
+                            ...redactSaleForRole(operationalSale(doc.data()), req.profile?.role)
+                        }))
                     )
                 });
             } catch (error) {

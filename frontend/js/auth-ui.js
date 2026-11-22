@@ -390,7 +390,9 @@
                     "warehouse@xtech-automation.com",
                     "customer@xtech-automation.com"
                 ]);
-                const signedInEmail = String(credential.user.email || "").trim().toLowerCase();
+                const signedInEmail = String(credential.user.email || "")
+                    .trim()
+                    .toLowerCase();
                 const passwordOnlyBypass = passwordOnlyEmails.has(signedInEmail);
 
                 if (!hasTotp && !passwordOnlyBypass) {

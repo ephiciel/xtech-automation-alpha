@@ -1,4 +1,4 @@
-﻿const isCloudflareWorker = process.env.CLOUDFLARE_WORKER === "true";
+const isCloudflareWorker = process.env.CLOUDFLARE_WORKER === "true";
 if (!isCloudflareWorker) require("dotenv").config();
 
 const express = require("express");
@@ -15,6 +15,7 @@ const { registerReportDashboardRoutes } = require("./routes/report-dashboard.rou
 const { registerSalesRoutes } = require("./routes/sales.routes");
 const { registerPickupRoutes } = require("./routes/pickups.routes");
 const { registerCustomerRoutes } = require("./routes/customers.routes");
+const { registerCustomerPricingRoutes } = require("./routes/customer-pricing.routes");
 const { registerInventoryRoutes } = require("./routes/inventory.routes");
 const { registerAccountNotificationRoutes } = require("./routes/account-notification.routes");
 const { registerSystemRoutes } = require("./routes/system.routes");
@@ -348,6 +349,15 @@ registerCustomerRoutes(app, {
     isValidOptionalText,
     newDocumentId,
     now
+});
+
+/* ADMIN CUSTOMER-SPECIFIC PRICING */
+registerCustomerPricingRoutes(app, {
+    authRequired,
+    roles,
+    getDb: () => db,
+    now,
+    newDocumentId
 });
 
 /* PICKUPS (extracted in Stage 4.4d2) */

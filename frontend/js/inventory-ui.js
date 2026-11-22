@@ -42,6 +42,16 @@
             return `<img data-product-image alt="Product" loading="lazy" referrerpolicy="no-referrer" width="60" height="60" style="object-fit:cover;border-radius:6px" src="${esc(src)}">`;
         }
 
+        function formatPriceCents(value) {
+            return Number.isSafeInteger(value) && value >= 0
+                ? "PHP " +
+                      (value / 100).toLocaleString("en-PH", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                      })
+                : "Not set";
+        }
+
         // Handles inventory products and stock actions
         // Loads active products from the backend
         async function loadInventory() {
@@ -86,12 +96,13 @@
                           (product) => `<tr>
                 <td><strong>${esc(product.productID)}</strong></td><td>${esc(product.productName)}</td><td>${esc(product.category)}</td>
                 <td>${productPhoto(product)}</td>
+                <td>${getProfile()?.role === "admin" ? esc(formatPriceCents(product.basePriceCents)) : "Restricted"}</td>
                 <td>${badge(stockStatus(product))}</td>
                 <td>${canManage ? `<button class="small-btn secondary" onclick="editProduct('${esc(product.productID)}')">Edit</button><button class="small-btn ghost dark-ghost" onclick="archiveProduct('${esc(product.productID)}')">Archive</button>` : "—"}</td>
             </tr>`
                       )
                       .join("")
-                : '<tr><td colspan="6"><div class="table-empty">No products match the current filters.</div></td></tr>';
+                : '<tr><td colspan="7"><div class="table-empty">No products match the current filters.</div></td></tr>';
         }
 
         ["productSearch", "categoryFilter", "statusFilter"].forEach((id) =>
@@ -124,6 +135,10 @@
                                 quantity: 0,
                                 reorderLevel: 0,
                                 imageUrl: $("productImageUrl").value.trim() || null,
+                                ...(getProfile()?.role === "admin" &&
+                                $("productBasePrice").value.trim()
+                                    ? { basePrice: $("productBasePrice").value.trim() }
+                                    : {}),
                                 description
                             })
                         }),
@@ -146,6 +161,7 @@
               <form id="editProductForm" class="form-grid">
                 <label>Product Name<input id="editProductName" value="${esc(product.productName)}" required></label>
                 <label>Category<select id="editProductCategory"><option ${product.category === "Industrial Chemical" ? "selected" : ""}>Industrial Chemical</option><option ${product.category === "Janitorial Chemical" ? "selected" : ""}>Janitorial Chemical</option><option ${product.category === "Cleaning Supply" ? "selected" : ""}>Cleaning Supply</option><option ${product.category === "Other" ? "selected" : ""}>Other</option></select></label>
+                ${getProfile()?.role === "admin" ? `<label class="wide">Default selling price (PHP)<input id="editProductBasePrice" type="number" min="0" max="9999999.99" step="0.01" value="${Number.isSafeInteger(product.basePriceCents) ? (product.basePriceCents / 100).toFixed(2) : ""}" placeholder="Optional"></label>` : ""}
                 <label class="wide">Product picture URL (HTTPS)<input type="url" maxlength="2048" id="editProductImageUrl" value="${esc(/^https:\/\//i.test(product.imageUrl || "") ? product.imageUrl : "")}" placeholder="https://example.com/product.jpg"></label>
                 <label class="wide">Description<textarea id="editProductDescription">${esc(product.description || "")}</textarea></label>
                 <button class="primary wide">Save Product Changes</button>
@@ -172,6 +188,12 @@
                                     category,
                                     unit: product.unit || "",
                                     reorderLevel: Number(product.reorderLevel || 0),
+                                    ...(getProfile()?.role === "admin"
+                                        ? {
+                                              basePrice:
+                                                  $("editProductBasePrice").value.trim() || null
+                                          }
+                                        : {}),
                                     // Existing non-HTTPS image references are preserved untouched.
                                     ...(/^https:\/\//i.test(product.imageUrl || "")
                                         ? {
