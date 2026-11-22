@@ -285,6 +285,18 @@ async function loadCustomerProducts() {
     return customerProductsUi.loadCustomerProducts();
 }
 
+// Staff catalogue editor with independent role checks.
+if (!window.XTechCatalogPricingUi) throw new Error("XTECH catalog module missing.");
+const catalogPricingUi = window.XTechCatalogPricingUi.createCatalogPricingUi({
+    $,
+    api,
+    toast,
+    getProfile: () => profile
+});
+function loadCatalogPricing() {
+    return catalogPricingUi.loadCatalogPricing();
+}
+
 // Stage 4.41: shared page shell owns navigation, role visibility, theme, and modal controls.
 if (!window.XTechAppShellUi)
     throw new Error("XTECH application shell is missing. Check script order.");
@@ -308,6 +320,7 @@ const appShellUi = window.XTechAppShellUi.createAppShellUi({
     loadCustomers,
     loadPickups,
     loadCustomerProducts,
+    loadCatalogPricing,
     loadNotifications,
     loadSales,
     loadUsers,

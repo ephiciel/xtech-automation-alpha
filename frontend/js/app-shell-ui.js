@@ -20,6 +20,7 @@
             loadCustomers,
             loadPickups,
             loadCustomerProducts,
+            loadCatalogPricing,
             loadNotifications,
             loadSales,
             loadUsers,
@@ -48,6 +49,7 @@
             if (name === "transactions") loadTransactions();
             if (name === "customers") loadCustomers();
             if (name === "customerProducts") loadCustomerProducts();
+            if (name === "catalogPricing") loadCatalogPricing();
             if (name === "pickups") return loadPickups();
             if (name === "notifications") loadNotifications({ silent: true });
             if (name === "sales") loadSales();
@@ -68,6 +70,7 @@
                     "inventory",
                     "transactions",
                     "customers",
+                    "catalogPricing",
                     "pickups",
                     "sales",
                     "users",
@@ -78,6 +81,7 @@
                     "dashboard",
                     "transactions",
                     "customers",
+                    "catalogPricing",
                     "pickups",
                     "sales",
                     "security"

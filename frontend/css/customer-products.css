@@ -110,3 +110,15 @@
         padding: 12px;
     }
 }
+
+/* Shared standard catalog price; never displays negotiated customer amounts. */
+.customer-catalog-price {
+    color: var(--text, currentColor);
+    font-weight: 750;
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+}
+#catalogPricing input[data-catalog-price] {
+    min-width: 125px;
+    max-width: 175px;
+}

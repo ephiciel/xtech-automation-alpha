@@ -572,6 +572,7 @@
                     <button class="nav" data-section="inventory">Inventory Management</button>
                     <button class="nav" data-section="transactions">Stock Movement History</button>
                     <button class="nav" data-section="customers">Customer Management</button>
+                    <button class="nav" data-section="catalogPricing">Catalog Pricing</button>
                     <button class="nav customer-only" data-section="customerProducts">
                         View Products
                     </button>
@@ -680,6 +681,47 @@
                                     <tbody id="dashboardLowStock"></tbody>
                                 </table>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- Standard catalog prices editable by Admin and Secretary. -->
+                    <section id="catalogPricing" class="section">
+                        <div class="page-head">
+                            <div>
+                                <h1>Catalog Pricing</h1>
+                                <p>
+                                    Set a single selling price shown to all customers in View
+                                    Products.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <label for="catalogPricingSearch">Search products</label>
+                            <input
+                                id="catalogPricingSearch"
+                                type="search"
+                                placeholder="Product name, ID or category"
+                                maxlength="120"
+                            />
+                            <div class="table-wrap">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Category</th>
+                                            <th>Current Price</th>
+                                            <th>New Price (PHP)</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="catalogPricingRows"></tbody>
+                                </table>
+                            </div>
+                            <p id="catalogPricingMessage" class="message" role="status"></p>
+                            <p class="muted">
+                                This is the standard catalog price. Negotiated customer and
+                                authorized sale prices remain separate.
+                            </p>
                         </div>
                     </section>
 
@@ -1704,6 +1746,7 @@
         <script src="js/inventory-ui.js"></script>
         <script src="js/customer-ui.js"></script>
         <script src="js/customer-prices-ui.js"></script>
+        <script src="js/catalog-pricing-ui.js"></script>
         <script src="js/pickup-ui.js"></script>
         <script src="js/product-lightbox.js"></script>
         <script src="js/sales-ui.js"></script>

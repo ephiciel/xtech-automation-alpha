@@ -90,6 +90,7 @@ function fixture(options = {}) {
     const app = {
         get: (url, ...handlers) => routes.push({ method: "GET", url, handlers }),
         put: (url, ...handlers) => routes.push({ method: "PUT", url, handlers }),
+        patch: (url, ...handlers) => routes.push({ method: "PATCH", url, handlers }),
         delete: (url, ...handlers) => routes.push({ method: "DELETE", url, handlers })
     };
 
@@ -164,16 +165,17 @@ function fixture(options = {}) {
 const pricePath = "/api/customers/:id/prices/:productID";
 const listPath = "/api/customers/:id/prices";
 
-test("registers three routes without connecting to Firestore", () => {
+test("registers three original customer pricing routes alongside two catalog routes without Firestore access", () => {
     const f = fixture();
-    assert.equal(f.routes.length, 3);
+    assert.equal(f.routes.length, 5);
+    assert.equal(f.routes.filter((route) => route.url.startsWith("/api/customers/")).length, 3);
     assert.equal(f.reads, 0);
 });
 
 test("only authenticated Admin can access pricing routes", async () => {
     const f = fixture();
 
-    for (const route of f.routes) {
+    for (const route of f.routes.filter((entry) => entry.url.startsWith("/api/customers/"))) {
         for (const role of ["customer", "secretary", "warehouse"]) {
             const res = await f.request(route.method, route.url, { price: "220" }, { role });
 

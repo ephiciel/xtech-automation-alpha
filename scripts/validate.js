@@ -27,6 +27,7 @@ const files = [
     "frontend/js/auth-client.js",
     "frontend/js/inventory-ui.js",
     "frontend/js/customer-ui.js",
+    "frontend/js/catalog-pricing-ui.js",
     "frontend/js/pickup-ui.js",
     "frontend/js/sales-ui.js",
     "frontend/js/dashboard-ui.js",
@@ -87,6 +88,7 @@ for (const file of [
     "frontend/js/auth-client.js",
     "frontend/js/inventory-ui.js",
     "frontend/js/customer-ui.js",
+    "frontend/js/catalog-pricing-ui.js",
     "frontend/js/pickup-ui.js",
     "frontend/js/sales-ui.js",
     "frontend/js/dashboard-ui.js",
@@ -181,6 +183,30 @@ const financialUiHits = quantityOnlyFiles.filter((file) => {
     let source = fs.readFileSync(path.join(root, file), "utf8");
 
     if (file === "frontend/index.html") {
+        const catalogNavPattern =
+            /<button\s+class="nav"\s+data-section="catalogPricing">\s*Catalog Pricing\s*<\/button>/g;
+        const catalogNavHits = [...source.matchAll(catalogNavPattern)];
+        if (catalogNavHits.length !== 1) return true;
+        source = source.replace(catalogNavPattern, "");
+        const catalogScript = '<script src="js/catalog-pricing-ui.js"></script>';
+        if (source.split(catalogScript).length !== 2) return true;
+        source = source.replace(catalogScript, "");
+        const catalogBegin = "<!-- Standard catalog prices editable by Admin and Secretary. -->";
+        const catalogEnd = "<!-- Lets staff manage products and stock levels -->";
+        const catalogStart = source.indexOf(catalogBegin);
+        const catalogStop = source.indexOf(catalogEnd);
+        if (catalogStart < 0 || catalogStop <= catalogStart) return true;
+        const catalogSection = source.slice(catalogStart, catalogStop);
+        for (const required of [
+            'id="catalogPricing"',
+            'id="catalogPricingSearch"',
+            'id="catalogPricingRows"',
+            'id="catalogPricingMessage"'
+        ]) {
+            if (catalogSection.split(required).length !== 2) return true;
+        }
+        source = source.slice(0, catalogStart) + source.slice(catalogStop);
+
         for (const snippet of approvedProductPriceUi) {
             if (source.split(snippet).length !== 2) return true;
             source = source.replace(snippet, "");

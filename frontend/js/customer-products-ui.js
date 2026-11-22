@@ -83,6 +83,15 @@
                     stock ? "Available" : "Out of stock"
                 );
                 body.appendChild(availability);
+                const cents = product.sellingPriceCents;
+                const label =
+                    Number.isSafeInteger(cents) && cents >= 0
+                        ? new Intl.NumberFormat("en-PH", {
+                              style: "currency",
+                              currency: "PHP"
+                          }).format(cents / 100)
+                        : "Price not available";
+                body.appendChild(element("strong", "customer-catalog-price", label));
 
                 const details = element("details", "customer-catalog-details");
                 details.appendChild(element("summary", "", "View details"));
@@ -120,7 +129,7 @@
             if (getProfile()?.role !== "customer") return;
             grid.replaceChildren(element("p", "customer-catalog-empty", "Loading products..."));
             try {
-                const response = await api("/api/products");
+                const response = await api("/api/catalog/products");
                 if (response.success !== true || !Array.isArray(response.products)) {
                     throw new Error("Unable to load product catalogue.");
                 }
