@@ -233,6 +233,29 @@ const financialUiHits = quantityOnlyFiles.filter((file) => {
         source = source.slice(0, start) + source.slice(end);
     }
 
+    // Approved customer-facing pickup selling-price labels.
+    // All unrelated financial text remains subject to validation.
+    if (file === "frontend/index.html") {
+        const header = '<th id="pickupTotalPriceHeader" hidden>Total Price</th>';
+        if (source.split(header).length !== 2) return true;
+        source = source.replace(header, "");
+    }
+
+    if (file === "frontend/js/pickup-ui.js") {
+        const approvedPickupLabels = [
+            ["Price not available", 1],
+            ["Unit price:", 2],
+            ["Total price:", 1],
+            ["Price not recorded", 1],
+            ["Selling price is unavailable.", 1]
+        ];
+
+        for (const [label, count] of approvedPickupLabels) {
+            if (source.split(label).length !== count + 1) return true;
+            source = source.replaceAll(label, "");
+        }
+    }
+
     return disallowedFinancialUi.test(source);
 });
 

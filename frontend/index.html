@@ -1055,7 +1055,19 @@
                                         Select a product to view the current admin inventory
                                         quantity.
                                     </p>
+                                    <p
+                                        id="pickupSelectedPrice"
+                                        class="helper-text"
+                                        aria-live="polite"
+                                        hidden
+                                    ></p>
                                     <div id="pickupItemList" class="item-list"></div>
+                                    <p
+                                        id="pickupOrderTotal"
+                                        class="helper-text"
+                                        aria-live="polite"
+                                        hidden
+                                    ></p>
                                 </div>
                                 <label class="wide"
                                     >Pickup Notes (Optional)<textarea
@@ -1098,6 +1110,7 @@
                                             <th>Requested Pickup Date</th>
                                             <th>Pickup Status</th>
                                             <th>Products / Quantity</th>
+                                            <th id="pickupTotalPriceHeader" hidden>Total Price</th>
                                             <th>Notes</th>
                                             <th>Actions</th>
                                         </tr>

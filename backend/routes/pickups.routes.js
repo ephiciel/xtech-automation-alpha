@@ -1,4 +1,5 @@
 "use strict";
+const { resolvePriceCents, calculateLineTotalCents } = require("../utils/pricing");
 /**
  * Pickup creation, listing and status transitions.
  * Transactional stock deductions and audit logging are preserved verbatim.
@@ -94,7 +95,8 @@ function registerPickupRoutes(app, deps) {
                             .collection("customers")
                             .doc(req.profile.customerID)
                             .get();
-                        if (snap.exists) customerSnap = snap;
+                        if (snap.exists && snap.data().userUID === req.user.uid)
+                            customerSnap = snap;
                     }
                     if (!customerSnap) {
                         const snap = await db
@@ -135,7 +137,21 @@ function registerPickupRoutes(app, deps) {
                     const productSnaps = await Promise.all(
                         productRefs.map((productRef) => transaction.get(productRef))
                     );
+                    const priceRefs = customerID
+                        ? items.map((item) =>
+                              db
+                                  .collection("customers")
+                                  .doc(customerID)
+                                  .collection("prices")
+                                  .doc(item.productID)
+                          )
+                        : [];
+                    const priceSnaps = await Promise.all(
+                        priceRefs.map((priceRef) => transaction.get(priceRef))
+                    );
                     const timestamp = now();
+                    let totalCents = 0;
+                    let allPriced = true;
 
                     const lineItems = items.map((item, index) => {
                         const snap = productSnaps[index];
@@ -154,15 +170,53 @@ function registerPickupRoutes(app, deps) {
                             );
                         }
 
+                        const customerPrice = priceSnaps[index]?.exists
+                            ? priceSnaps[index].data()
+                            : null;
+                        const unitPriceCents = resolvePriceCents({
+                            basePriceCents: product.basePriceCents ?? null,
+                            customerPriceCents:
+                                customerPrice && customerPrice.active !== false
+                                    ? customerPrice.priceCents
+                                    : null
+                        }).priceCents;
+                        const lineTotalCents = calculateLineTotalCents(
+                            unitPriceCents,
+                            item.quantity
+                        );
+                        if (lineTotalCents === null) allPriced = false;
+                        else {
+                            totalCents += lineTotalCents;
+                            if (!Number.isSafeInteger(totalCents))
+                                throw new Error("Pickup total is too large.");
+                        }
                         return {
                             productID: product.productID,
                             productName: product.productName,
                             unit: product.unit || "units",
                             quantity: item.quantity,
-                            stockAtRequest: available
+                            stockAtRequest: available,
+                            unitPriceCents,
+                            lineTotalCents
                         };
                     });
 
+                    const snapshotTotalCents = allPriced ? totalCents : null;
+                    // Optional quote check for updated customers; older clients remain compatible.
+                    if (
+                        req.profile.role === "customer" &&
+                        Object.prototype.hasOwnProperty.call(req.body, "expectedTotalCents")
+                    ) {
+                        const expectedTotal = req.body.expectedTotalCents;
+                        if (
+                            !Number.isSafeInteger(expectedTotal) ||
+                            expectedTotal < 0 ||
+                            expectedTotal !== snapshotTotalCents
+                        )
+                            throw new Error(
+                                "Pickup prices changed or are unavailable. Review the updated total and try again."
+                            );
+                    }
                     pickup = {
                         pickupID: ref.id,
                         customerID,
@@ -170,6 +224,7 @@ function registerPickupRoutes(app, deps) {
                         customerName: customerData?.name || "Walk-in / No registered customer",
                         items: lineItems,
                         totalQuantity: lineItems.reduce((sum, item) => sum + item.quantity, 0),
+                        totalCents: snapshotTotalCents,
                         requestedDate,
                         notes,
                         status: "Pending",

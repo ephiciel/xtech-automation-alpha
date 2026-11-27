@@ -37,6 +37,71 @@
             window
         } = deps;
 
+        // Customer prices stay separate from the shared inventory state.
+        let customerPrices = new Map();
+        const isCustomer = () => getProfile()?.role === "customer";
+        const validCents = (value) => Number.isSafeInteger(value) && value >= 0;
+        const money = (cents, fallback = "Price not available") =>
+            validCents(cents)
+                ? new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(
+                      cents / 100
+                  )
+                : fallback;
+        const unitPrice = (id) => customerPrices.get(id) ?? null;
+        function subtotal(id, quantity) {
+            const cents = unitPrice(id);
+            const total = cents * quantity;
+            return validCents(cents) &&
+                Number.isSafeInteger(quantity) &&
+                quantity > 0 &&
+                validCents(total)
+                ? total
+                : null;
+        }
+        function orderTotal() {
+            let total = 0;
+            for (const item of getPickupFormItems()) {
+                const line = subtotal(item.productID, item.quantity);
+                if (line === null || !validCents(total + line)) return null;
+                total += line;
+            }
+            return total;
+        }
+        function priceSignature() {
+            return JSON.stringify(
+                getPickupFormItems().map((item) => [
+                    item.productID,
+                    item.quantity,
+                    unitPrice(item.productID)
+                ])
+            );
+        }
+        function renderSelectedPrice() {
+            const display = $("pickupSelectedPrice");
+            if (!display) return;
+            display.hidden = !isCustomer();
+            const id = $("pickupProduct")?.value;
+            const qty = Number($("pickupQuantity")?.value);
+            display.textContent =
+                isCustomer() && id
+                    ? `Unit price: ${money(unitPrice(id))} · Subtotal: ${money(subtotal(id, qty))}`
+                    : "";
+        }
+        async function refreshCustomerPrices() {
+            customerPrices = new Map();
+            if (!isCustomer()) return;
+            const data = await api("/api/catalog/products", { silent: true });
+            if (!Array.isArray(data.products))
+                throw new Error("Unable to load current selling prices.");
+            if (!isCustomer()) return;
+            customerPrices = new Map(
+                data.products.map((product) => [
+                    product.productID,
+                    validCents(product.sellingPriceCents) ? product.sellingPriceCents : null
+                ])
+            );
+        }
+
         function pickupPhoto(product, size = 40) {
             const src = typeof product?.imageUrl === "string" ? product.imageUrl : "";
             if (!/^https:\/\//i.test(src)) return "";
@@ -53,12 +118,18 @@
                           const product = productById(item.productID);
                           return `<div class="item-row">
                     <div>${pickupPhoto(product)}<strong>${esc(product?.productName || item.productID)}</strong><small>${esc(item.productID)} · Available: ${Number(product?.quantity ?? 0)} ${esc(product?.unit || "units")}</small></div>
-                    <span>Requested: <strong>${item.quantity}</strong></span>
+                    <span>Requested: <strong>${item.quantity}</strong>${isCustomer() ? `<small class="table-subtext">Unit price: ${esc(money(unitPrice(item.productID)))} · Subtotal: ${esc(money(subtotal(item.productID, item.quantity)))}</small>` : ""}</span>
                     <button type="button" class="small-btn ghost dark-ghost" onclick="removePickupItem('${esc(item.productID)}')">Remove</button>
                 </div>`;
                       })
                       .join("")
                 : '<div class="empty-state">No products added to this pickup request yet.</div>';
+            const total = $("pickupOrderTotal");
+            if (total) {
+                total.hidden = !isCustomer();
+                total.textContent = isCustomer() ? `Total price: ${money(orderTotal())}` : "";
+            }
+            renderSelectedPrice();
         }
 
         // Keeps pickup quantities synchronized with the same inventory values shown to admin users.
@@ -79,6 +150,7 @@
                 if (hint)
                     hint.textContent =
                         "Select a product to view the current admin inventory quantity.";
+                renderSelectedPrice();
                 return;
             }
 
@@ -100,11 +172,18 @@
                         ? `Admin inventory: ${adminStock} ${product.unit || "units"}. ${alreadyAdded} already added to this request; ${remaining} can still be added.`
                         : `Admin inventory: ${adminStock} ${product.unit || "units"}. No more can be added to this request.`;
             }
+            renderSelectedPrice();
         }
 
         // Reloads the authoritative product stock used by the admin account.
         async function refreshPickupInventory() {
-            const data = await api("/api/products", { silent: true });
+            const [data] = await Promise.all([
+                api("/api/products", { silent: true }),
+                refreshCustomerPrices()
+            ]).catch((error) => {
+                renderPickupFormItems();
+                throw error;
+            });
             setProducts(data.products || []);
             updateProductSelectors();
             renderPickupFormItems();
@@ -122,8 +201,13 @@
                     ensureFormData({ needCustomers })
                 ]);
                 setPickups(pickupData.pickups || []);
-                renderPickupFormItems();
                 renderPickups();
+                try {
+                    await refreshCustomerPrices();
+                } finally {
+                    renderPickupFormItems();
+                    syncPickupQuantityLimit();
+                }
             } catch (error) {
                 toast(error.message);
             }
@@ -152,6 +236,8 @@
                 );
             });
 
+            const priceHeader = $("pickupTotalPriceHeader");
+            if (priceHeader) priceHeader.hidden = !isCustomer();
             $("pickupTable").innerHTML = rows.length
                 ? rows
                       .map((pickup) => {
@@ -169,10 +255,10 @@
                           ) {
                               actions = `<button class="small-btn primary" onclick="setPickup('${esc(pickup.id || pickup.pickupID)}', 'Completed')">Complete Pickup</button><button class="small-btn ghost dark-ghost" onclick="setPickup('${esc(pickup.id || pickup.pickupID)}', 'Cancelled')">Cancel</button>`;
                           }
-                          return `<tr><td>${fmtDateTime(pickup.createdAt)}</td><td><strong>${esc(pickup.pickupID)}</strong></td><td>${esc(pickup.customerName || customerNameFor(pickup.customerID, "Walk-in / No registered customer"))}</td><td>${fmtDate(pickup.requestedDate)}</td><td>${badge(pickup.status)}</td><td>${itemSummary(pickup.items)}<small class="table-subtext">Total ordered: ${Number(pickup.totalQuantity ?? (pickup.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</small></td><td class="wrap-cell">${esc(pickup.notes || "—")}</td><td>${actions}</td></tr>`;
+                          return `<tr><td>${fmtDateTime(pickup.createdAt)}</td><td><strong>${esc(pickup.pickupID)}</strong></td><td>${esc(pickup.customerName || customerNameFor(pickup.customerID, "Walk-in / No registered customer"))}</td><td>${fmtDate(pickup.requestedDate)}</td><td>${badge(pickup.status)}</td><td>${itemSummary(pickup.items)}<small class="table-subtext">Total ordered: ${Number(pickup.totalQuantity ?? (pickup.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</small></td>${isCustomer() ? `<td><strong>${esc(money(pickup.totalCents, "Price not recorded"))}</strong></td>` : ""}<td class="wrap-cell">${esc(pickup.notes || "—")}</td><td>${actions}</td></tr>`;
                       })
                       .join("")
-                : '<tr><td colspan="8"><div class="table-empty">No pickup requests match the current filters.</div></td></tr>';
+                : `<tr><td colspan="${isCustomer() ? 9 : 8}"><div class="table-empty">No pickup requests match the current filters.</div></td></tr>`;
         }
 
         ["pickupSearch", "pickupStatusFilter", "pickupFrom", "pickupTo"].forEach((id) =>
@@ -180,6 +266,7 @@
         );
 
         $("pickupProduct").addEventListener("change", syncPickupQuantityLimit);
+        $("pickupQuantity").addEventListener("input", renderSelectedPrice);
 
         $("addPickupItem").addEventListener("click", async (event) => {
             try {
@@ -193,6 +280,8 @@
                 if (!product) return toast("Select a product first.");
 
                 validatePositiveWholeNumber(quantity, "Pickup quantity");
+                if (isCustomer() && subtotal(productID, quantity) === null)
+                    return toast("Selling price is unavailable. Please contact AGB XTECH.");
 
                 const existing = getPickupFormItems().find((item) => item.productID === productID);
                 const requestedTotal = quantity + (existing?.quantity || 0);
@@ -235,6 +324,7 @@
                 const notes = validateText($("pickupNotes").value, "Pickup notes", 500);
 
                 // Recheck immediately before submission so stale browser data cannot be used.
+                const quotedPrices = isCustomer() ? priceSignature() : null;
                 await refreshPickupInventory();
                 for (const item of getPickupFormItems()) {
                     const product = productById(item.productID);
@@ -248,6 +338,15 @@
                     }
                 }
 
+                const expectedTotalCents = isCustomer() ? orderTotal() : null;
+                if (
+                    isCustomer() &&
+                    (expectedTotalCents === null || quotedPrices !== priceSignature())
+                ) {
+                    throw new Error(
+                        "Pickup prices changed or are unavailable. Review the updated total and try again."
+                    );
+                }
                 await busy(
                     event.submitter,
                     () =>
@@ -260,7 +359,8 @@
                                         : $("pickupCustomerID").value || null,
                                 requestedDate,
                                 notes,
-                                items: getPickupFormItems()
+                                items: getPickupFormItems(),
+                                ...(isCustomer() ? { expectedTotalCents } : {})
                             })
                         }),
                     "Submitting Pickup…"
@@ -279,6 +379,13 @@
                 ]);
                 toast("Pickup request submitted");
             } catch (error) {
+                if (isCustomer() && /prices changed or are unavailable/i.test(error.message)) {
+                    try {
+                        await refreshPickupInventory();
+                    } catch {
+                        /* Keep the original message. */
+                    }
+                }
                 setMessage("pickupMessage", error.message);
             }
         });

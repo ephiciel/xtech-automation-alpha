@@ -1,6 +1,6 @@
 "use strict";
 
-const { parsePriceCents } = require("../utils/pricing");
+const { parsePriceCents, resolvePriceCents } = require("../utils/pricing");
 
 function registerCustomerPricingRoutes(app, deps) {
     const { authRequired, roles, getDb, now, newDocumentId } = deps;
@@ -221,18 +221,58 @@ function registerCustomerPricingRoutes(app, deps) {
         }
     );
 
-    // Public within authenticated customer/staff accounts; no negotiated prices or audits.
+    // Return only the effective selling price to the authenticated customer; staff see standard prices.
     app.get(
         "/api/catalog/products",
         authRequired,
         roles("admin", "secretary", "customer"),
         async (req, res) => {
             try {
-                const snap = await getDb().collection("products").where("active", "==", true).get();
+                const db = getDb();
+                const snap = await db.collection("products").where("active", "==", true).get();
+                const negotiated = new Map();
+                if (req.profile.role === "customer") {
+                    // Resolve the customer from server-side identity, never request parameters.
+                    const customers = db.collection("customers");
+                    let linked = null;
+                    if (safeId(req.profile.customerID)) {
+                        const candidate = await customers.doc(req.profile.customerID).get();
+                        if (candidate.exists && candidate.data().userUID === req.user.uid)
+                            linked = candidate;
+                    }
+                    if (!linked) {
+                        const matches = await customers
+                            .where("userUID", "==", req.user.uid)
+                            .limit(1)
+                            .get();
+                        linked = matches.docs[0] || null;
+                    }
+                    if (linked && linked.data().active !== false) {
+                        const prices = await customers.doc(linked.id).collection("prices").get();
+                        for (const doc of prices.docs) {
+                            const price = doc.data();
+                            if (
+                                price.active !== false &&
+                                Number.isSafeInteger(price.priceCents) &&
+                                price.priceCents >= 0 &&
+                                price.priceCents <= 999999999
+                            )
+                                negotiated.set(doc.id, price.priceCents);
+                        }
+                    }
+                }
                 const products = snap.docs
                     .map((doc) => {
                         const p = doc.data();
-                        const cents = p.basePriceCents;
+                        const cents = resolvePriceCents({
+                            basePriceCents:
+                                Number.isSafeInteger(p.basePriceCents) &&
+                                p.basePriceCents >= 0 &&
+                                p.basePriceCents <= 999999999
+                                    ? p.basePriceCents
+                                    : null,
+                            customerPriceCents: negotiated.get(p.productID || doc.id) ?? null
+                        }).priceCents;
                         return {
                             productID: p.productID || doc.id,
                             productName: p.productName || "",

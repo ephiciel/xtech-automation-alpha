@@ -3,7 +3,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { registerCustomerPricingRoutes } = require("../backend/routes/customer-pricing.routes");
 
-function fixture(role = "secretary", previous = 18000, active = true) {
+function fixture(
+    role = "secretary",
+    previous = 18000,
+    active = true,
+    negotiated = null,
+    owner = "staff-1",
+    priceActive = true
+) {
     const routes = [];
     const authRequired = (_req, _res, next) => next();
     const roles = (...allowed) => {
@@ -39,6 +46,39 @@ function fixture(role = "secretary", previous = 18000, active = true) {
     const db = {
         collection(name) {
             if (name === "products") return products;
+            if (name === "customers") {
+                const linked = {
+                    id: "C-01",
+                    exists: true,
+                    data: () => ({ userUID: owner, active: true })
+                };
+                return {
+                    doc: () => ({
+                        get: async () => linked,
+                        collection: () => ({
+                            get: async () => ({
+                                docs:
+                                    negotiated === null
+                                        ? []
+                                        : [
+                                              {
+                                                  id: "AF-001",
+                                                  data: () => ({
+                                                      active: priceActive,
+                                                      priceCents: negotiated
+                                                  })
+                                              }
+                                          ]
+                            })
+                        })
+                    }),
+                    where: () => ({
+                        limit: () => ({
+                            get: async () => ({ docs: owner === "staff-1" ? [linked] : [] })
+                        })
+                    })
+                };
+            }
             if (name === "pricingAudit") return { doc: () => ({ id: "audit-1" }) };
             throw Error("Unexpected db: " + name);
         },
@@ -75,7 +115,7 @@ function fixture(role = "secretary", previous = 18000, active = true) {
     const request = (body = {}) => ({
         body,
         params: { productID: "AF-001" },
-        profile: { role },
+        profile: { role, customerID: "C-01" },
         user: { uid: "staff-1" }
     });
     async function invoke(method, p, body) {
@@ -99,6 +139,22 @@ test("catalog list is whitelisted and includes one standard price", async () => 
     assert.equal(r.body.products[0].basePriceCents, undefined);
     assert.equal(r.body.products[0].priceCents, undefined);
     assert.equal(r.body.products[0].priceAudit, undefined);
+});
+test("catalog returns only the customer's own effective negotiated price", async () => {
+    for (const [role, owner, active, expected] of [
+        ["customer", "staff-1", true, 12500],
+        ["customer", "someone-else", true, 18000],
+        ["customer", "staff-1", false, 18000],
+        ["secretary", "staff-1", true, 18000]
+    ]) {
+        const r = await fixture(role, 18000, true, 12500, owner, active).invoke(
+            "get",
+            "/api/catalog/products"
+        );
+        assert.equal(r.body.products[0].sellingPriceCents, expected);
+        assert.equal(r.body.products[0].basePriceCents, undefined);
+        assert.equal(r.body.products[0].priceSource, undefined);
+    }
 });
 test("catalog list blocks warehouse", async () => {
     const r = await fixture("warehouse").invoke("get", "/api/catalog/products");

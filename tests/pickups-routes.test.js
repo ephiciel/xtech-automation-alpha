@@ -24,7 +24,15 @@ const pickup = (status = "Pending", overrides = {}) => ({
     ...overrides
 });
 function fixture(seed = {}, options = {}) {
-    const names = ["pickups", "products", "customers", "inventoryTransactions"];
+    const names = [
+        ...new Set([
+            "pickups",
+            "products",
+            "customers",
+            "inventoryTransactions",
+            ...Object.keys(seed)
+        ])
+    ];
     const state = Object.fromEntries(
         names.map((name) => [name, new Map(Object.entries(seed[name] || {}))])
     );
@@ -35,6 +43,7 @@ function fixture(seed = {}, options = {}) {
     const updates = [];
     const record = (name, id) => ({
         id,
+        collection: (sub) => collection(name + "/" + id + "/" + sub),
         async get() {
             return { id, exists: state[name].has(id), data: () => ({ ...state[name].get(id) }) };
         },
@@ -294,6 +303,48 @@ test("customer pickup uses authenticated profile instead of forged customer ID",
     assert.equal(r.code, 201);
     assert.equal(r.body.pickup.customerID, "customer-1");
     assert.equal(r.body.pickup.customerUID, "customer-uid");
+});
+test("customer pickup saves negotiated price snapshots and ignores client-supplied prices", async () => {
+    const f = fixture({
+        customers: { "customer-1": { name: "Mara", active: true, userUID: "customer-uid" } },
+        products: { "CHEM-01": product(10, { basePriceCents: 18000 }) },
+        "customers/customer-1/prices": { "CHEM-01": { active: true, priceCents: 12500 } }
+    });
+    const r = await f.request("post", "/api/pickups", {
+        role: "customer",
+        uid: "customer-uid",
+        body: {
+            ...withItem,
+            items: [{ productID: "CHEM-01", quantity: 3, unitPriceCents: 1 }],
+            expectedTotalCents: 37500
+        }
+    });
+    assert.equal(r.code, 201);
+    assert.equal(r.body.pickup.items[0].unitPriceCents, 12500);
+    assert.equal(r.body.pickup.items[0].lineTotalCents, 37500);
+    assert.equal(r.body.pickup.totalCents, 37500);
+    f.state.products.get("CHEM-01").basePriceCents = 99900;
+    f.state["customers/customer-1/prices"].get("CHEM-01").priceCents = 99900;
+    const list = await f.request("get", "/api/pickups", { role: "customer", uid: "customer-uid" });
+    assert.equal(list.body.pickups[0].totalCents, 37500);
+    const stale = await f.request("post", "/api/pickups", {
+        role: "customer",
+        uid: "customer-uid",
+        body: { ...withItem, expectedTotalCents: 37500 }
+    });
+    assert.equal(stale.code, 400);
+    assert.equal(f.state.pickups.size, 1);
+});
+test("pickup uses default price without a negotiated price and keeps missing prices null", async () => {
+    for (const [base, total] of [
+        [18000, 54000],
+        [null, null]
+    ]) {
+        const f = fixture({ products: { "CHEM-01": product(10, { basePriceCents: base }) } });
+        const r = await f.request("post", "/api/pickups", { body: withItem });
+        assert.equal(r.code, 201);
+        assert.equal(r.body.pickup.totalCents, total);
+    }
 });
 test("pickup creation checks inventory transactionally without reducing stock", async () => {
     const f = fixture({ products: { "CHEM-01": product(10) } });

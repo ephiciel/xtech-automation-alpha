@@ -106,7 +106,13 @@ function harness({
     const defaults = {
         "/api/customers": { customers },
         "/api/pickups": { pickups },
-        "/api/products": { products }
+        "/api/products": { products },
+        "/api/catalog/products": {
+            products: products.map((p) => ({
+                ...p,
+                sellingPriceCents: p.sellingPriceCents ?? 18000
+            }))
+        }
     };
     const api = async (url, opts = {}) => {
         calls.push({ url, opts });
@@ -433,6 +439,7 @@ test("pickup submission rechecks stock and preserves customer role payload", asy
     assert.ok(sent);
     const body = JSON.parse(sent.opts.body);
     assert.equal(body.customerID, null);
+    assert.equal(body.expectedTotalCents, 18000);
     assert.equal(body.items[0].productID, "CHEM-01");
     assert.equal(h.formItems.length, 0);
     assert.ok(h.messages.some((m) => m.kind === "success" && m.id === "pickupMessage"));
@@ -450,6 +457,62 @@ test("pickup submission refuses stale stock before a POST", async () => {
     await submit(h.$("pickupForm"));
     assert.ok(!h.calls.some((c) => c.url === "/api/pickups" && c.opts.method === "POST"));
     assert.ok(h.messages.some((m) => m.message.includes("Admin inventory shows")));
+});
+test("customer pickup displays effective price and totals, and recalculates on removal", async () => {
+    const h = harness({ role: "customer", products: [{ ...cleaner, sellingPriceCents: 12550 }] });
+    h.$("pickupProduct").value = "CHEM-01";
+    h.$("pickupQuantity").value = "2";
+    await h.$("addPickupItem").handlers.click({ currentTarget: h.$("addPickupItem") });
+    assert.match(h.$("pickupItemList").innerHTML, /125\.50/);
+    assert.match(h.$("pickupItemList").innerHTML, /251\.00/);
+    assert.match(h.$("pickupOrderTotal").textContent, /251\.00/);
+    h.win.removePickupItem("CHEM-01");
+    assert.match(h.$("pickupOrderTotal").textContent, /0\.00/);
+});
+test("customer history displays saved total and marks old records unpriced", () => {
+    const h = harness({ role: "customer", pickups: [{ ...pending, totalCents: 37500 }, approved] });
+    h.pickupUi.renderPickups();
+    assert.match(h.$("pickupTable").innerHTML, /375\.00/);
+    assert.match(h.$("pickupTable").innerHTML, /Price not recorded/);
+    assert.equal(h.$("pickupTotalPriceHeader").hidden, false);
+    const staff = harness({ role: "secretary", pickups: [{ ...pending, totalCents: 37500 }] });
+    staff.pickupUi.renderPickups();
+    assert.equal(staff.$("pickupTotalPriceHeader").hidden, true);
+    assert.doesNotMatch(staff.$("pickupTable").innerHTML, /375\.00/);
+});
+test("customer cannot submit after the price changes without reviewing the new total", async () => {
+    let price = 18000;
+    const h = harness({
+        role: "customer",
+        products: [cleaner],
+        responses: {
+            "/api/catalog/products": () => ({
+                products: [{ ...cleaner, sellingPriceCents: price }]
+            })
+        }
+    });
+    h.$("pickupProduct").value = "CHEM-01";
+    h.$("pickupQuantity").value = "1";
+    await h.$("addPickupItem").handlers.click({ currentTarget: h.$("addPickupItem") });
+    price = 20000;
+    await submit(h.$("pickupForm"));
+    assert.ok(!h.calls.some((c) => c.url === "/api/pickups" && c.opts.method === "POST"));
+    assert.match(h.$("pickupOrderTotal").textContent, /200\.00/);
+    assert.ok(h.messages.some((m) => /prices changed/.test(m.message)));
+});
+test("customer cannot add an item with missing price", async () => {
+    const h = harness({
+        role: "customer",
+        products: [cleaner],
+        responses: {
+            "/api/catalog/products": { products: [{ ...cleaner, sellingPriceCents: null }] }
+        }
+    });
+    h.$("pickupProduct").value = "CHEM-01";
+    h.$("pickupQuantity").value = "1";
+    await h.$("addPickupItem").handlers.click({ currentTarget: h.$("addPickupItem") });
+    assert.equal(h.formItems.length, 0);
+    assert.ok(h.toasts.some((m) => /price is unavailable/.test(m)));
 });
 test("staff completes pickup through PATCH and refreshes inventory/transactions", async () => {
     const h = harness({ role: "admin" });
